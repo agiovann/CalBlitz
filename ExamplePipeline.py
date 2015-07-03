@@ -8,16 +8,17 @@ Created on Tue Jun 30 20:56:07 2015
 import sys
 sys.path
 # add 
-sys.path.append('/Users/agiovann/Dropbox/Python/princeton-ecs/princeton-ecs')
+#sys.path.append('/Users/agiovann/Dropbox/Python/princeton-ecs/princeton-ecs')
 from XMovie import XMovie
 import time
 plt.ion()
 %load_ext autoreload
 %autoreload 2
+import numpy as np
 #%% define movie
 #m=XMovie('M_FLUO.tif', frameRate=.064);
 #m=XMovie('M_FLUO_1.tif', frameRate=.064);
-m=XMovie('k23_20150424_002_001.tif', frameRate=.033);
+m=XMovie('k26_v1_176um_target_pursuit_001_005.tif', frameRate=.033);
 
 #%% motion correct run x times
 # WHEN YOU RUN motion_correct YOUR ARE MODIFYING THE OBJECT!!!!

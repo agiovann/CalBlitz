@@ -13,12 +13,13 @@ import scipy.ndimage
 import warnings
 import numpy as np
 from sklearn.decomposition import IncrementalPCA, FastICA
-from motion_correction import MotionCorrector
 import pylab as plt
 plt.ion()
 from scipy.ndimage.filters import gaussian_filter
 from scipy.ndimage import label
+
 import tifffile
+
 import sys
 #%%
 class XMovie(object):
