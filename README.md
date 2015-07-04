@@ -1,8 +1,8 @@
 # CalBlitz
-Blazing fast calcium imaging analysis toolbox
+**Blazing fast** calcium imaging analysis toolbox
 
 ## Synopsis
-This projects implements a set of essential methods required in the calcium imaging movies analysis pipeline. Fast and scalable algorithms are implemented for motion correction, movie manipulation and roi segmentation. It is assumed that movies are collecetd with the scanimage data acquisition software and stored in tif format
+This projects implements a set of essential methods required in the calcium imaging movies analysis pipeline. **Fast and scalable algorithms** are implemented for motion correction, movie manipulation and roi segmentation. It is assumed that movies are collected with the scanimage data acquisition software and stored in *.tif* format
 
 ## Code Example
 
@@ -37,7 +37,6 @@ plt.imshow(m.mov[100],cmap=plt.cm.Greys_r)
 
 #%% example play movie
 m.playMovie(frate=.1,gain=6.0,magnification=1)
-
 ```
 
 
@@ -47,25 +46,31 @@ Recent advances in calcium imaging acquisition techniques are creating datasets 
 
 ## Installation
 
-requirements
+Prerequisites
 
-anaconda python
+install anaconda python distribution, then in your terminal type
 
+```
 conda install scipy 
 conda install matplotlib
 conda install PIL 
 conda install ipython 
-conda install pims
+conda install pip
+pip install pims
 conda install scikit­learn
-conda install opencv (for windows installation check (http://opencv-python-tutroals.readthedocs.org/en/latest/py_tutorials/py_setup/py_setup_in_windows/py_setup_in_windows.html)
+conda install opencv 
 
+```
+For opencv windows installation check [here]( 
+[http://opencv-python-tutroals.readthedocs.org/en/latest/py_tutorials/py_setup/py_setup_in_windows/py_setup_in_windows.html)
 
+If you have problems installing opencv remember to match your architecture (32/64 bits) and to make sure that you have the required libraries installed
 
-Provide code examples and explanations of how to get the project.
+Just add the CalBlitz folder to your Python path (or call the script from within the library). We suggest to use spyder to run the example code in *ExamplePipeline.py*. Each [code cell](https://pythonhosted.org/spyder/editor.html#how-to-define-a-code-cell) is a unit that should be run and the result inspected. This package is supposed to be used interactively, a la [MATLAB](http://www.mathworks.com).   
 
 ## API Reference
 
-TODO CREATE API REFERENCE
+TODO 
 
 ## Tests
 
@@ -73,24 +78,31 @@ Open the ExamplePipeline.py file and run cell by cell
 
 ## Contributors
 
-Andrea Giovannucci 
-Ben Deverett
-Chad Giusti
+Andrea Giovannucci, Ben Deverett, Chad Giusti
 
 
 ## License
 
+This program is free software; you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation; either version 2 of the License, or (at your option) any later version.
+
+This program is distributed WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License along with this program. If not, see <http://www.gnu.org/licenses/>.
+
 ## Troubleshooting
 
-Depending on terminal program used anaconda may not be in default path
-in this case, add anaconda to bin to path: export PATH=//anaconda/bin:$PATH
+1. Depending on terminal program used anaconda may not be in default path. In this case, add anaconda to bin to path: 
+```
+export PATH=//anaconda/bin:$PATH
+``
 
-Error: No packages found in current osx­64 channels matching: pims
-
-
-­ install pip: conda install pip
+2. Error: No packages found in current osx­64 channels matching: pims
+ install pip: conda install pip
 ­ use pip to install pims: pip install pims
-­ if pims causes kernel crash then use pip install pims ­­upgrade
+­ if pims causes kernel crash then use 
+ ```
+ pip install pims ­­--upgrade
+ ```
 
 
-­ remove from motion_correction import MotionCorrector
+­
