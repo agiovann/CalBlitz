@@ -6,20 +6,39 @@ This projects implements a set of essential methods required in the calcium imag
 
 ## Code Example
 
-load movie in memory 
-m=XMovie('movie_name.tif', frameRate=.033);
+```
+#%%
+from XMovie import XMovie
+from pylab import plt
+import numpy as np
 
-correct movie 
-template,shift=m.motion_correct(max_shift=max_shift)
+#%% define movie
+filename='your_file.tif'
+m=XMovie(filename, frameRate=.033);
 
-create DFF version of the movie 
-m=m.computeDFF(secsWindow=5,quantilMin=8)
+#%% motion correct run 1 time
+template,shift=m.motion_correct(max_shift=max_shift,template=None,show_movie=False);
 
-Perform iterative PCA ICA with 50 spatial components extracted
+#%% compute delta f over f DF/F
+m.computeDFF(secsWindow=5,quantilMin=20,subtract_minimum=True)
+
+#%% compute spatial components via ICA PCA
 spcomps=m.IPCA_stICA(components=50);
 
-Get regions of interest from spatial components
-masks=m.extractROIsFromPCAICA(spcomps, numSTD=5, gaussiansigmax=2 , gaussiansigmay=2)
+#%% extract ROIs from spatial components 
+masks=m.extractROIsFromPCAICA(spcomps, numSTD=8, gaussiansigmax=2 , gaussiansigmay=2)
+
+#%%  extract single ROIs from each mask
+allMasks=[np.array(mm==ll) for mm in masks  for ll in xrange(np.max(mm)) if 2000>np.sum(np.array(mm==ll))>10   ]
+allMasks=np.asarray(allMasks,dtype=np.float16)
+
+#%% example plot a frame
+plt.imshow(m.mov[100],cmap=plt.cm.Greys_r)
+
+#%% example play movie
+m.playMovie(frate=.1,gain=6.0,magnification=1)
+
+```
 
 
 ## Motivation
