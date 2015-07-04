@@ -43,7 +43,9 @@ conda install matplotlib
 conda install PIL 
 conda install ipython 
 conda install pims
-conda install opencv
+conda install scikit­learn
+conda install opencv (for windows installation check (http://opencv-python-tutroals.readthedocs.org/en/latest/py_tutorials/py_setup/py_setup_in_windows/py_setup_in_windows.html)
+
 
 
 Provide code examples and explanations of how to get the project.
@@ -65,3 +67,17 @@ Chad Giusti
 
 ## License
 
+## Troubleshooting
+
+Depending on terminal program used anaconda may not be in default path
+in this case, add anaconda to bin to path: export PATH=//anaconda/bin:$PATH
+
+Error: No packages found in current osx­64 channels matching: pims
+
+
+­ install pip: conda install pip
+­ use pip to install pims: pip install pims
+­ if pims causes kernel crash then use pip install pims ­­upgrade
+­ 
+
+­ remove from motion_correction import MotionCorrector

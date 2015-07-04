@@ -18,9 +18,12 @@ plt.ion()
 from scipy.ndimage.filters import gaussian_filter
 from scipy.ndimage import label
 
-import tifffile
-
+from libtiff import TIFF, TiffFile
 import sys
+import functools
+#%%
+
+    
 #%%
 class XMovie(object):
     """ 
@@ -48,7 +51,29 @@ class XMovie(object):
             self.frameRate = frameRate
         else:
             raise Exception('You need to specify the frame rate')
+    
+#    def create(self,itemType,itemName,*args,**kwargs):       
+#        print "Creating Item %s with name %s, args %r and kwargs %r" % (itemType,itemName,args,kwargs)
+#
+#    def __getattr__(self,attrName):        
+#        try: 
+#            return eval('self.mov.'+ attrName)
+#        except:          
+##            return eval('self.mov.'+ attrName)
+#            return functools.partial(self.create,attrName)
+#    def create(self,itemType,itemName,*args,**kwargs):       
+#        print type(itemType),type(itemName),type(args),type(kwargs)
+#
+#    def __getattr__(self,attrName):        
+#        try: 
+#            return eval('self.mov.'+ attrName)
+#        except:          
+##            return eval('self.mov.'+ attrName)
+#            return functools.partial(self.create,attrName)            
         
+        
+#    def __call__(self,*args,**kw):
+#        print args
         
     def motion_correct(self, max_shift=5, show_movie=False,template=None):
         """
@@ -217,7 +242,7 @@ class XMovie(object):
         
    
     
-    def playMovie(self,gain=1.0,frate=None,magnification=2):
+    def playMovie(self,gain=1.0,frate=None,magnification=2,offset=0):
          """
          Play the movie using opencv
          
@@ -231,7 +256,7 @@ class XMovie(object):
             frate=self.frameRate
          for frame in self.mov:
             frame = cv2.resize(frame,None,fx=magnification, fy=magnification, interpolation = cv2.INTER_CUBIC)
-            cv2.imshow('frame',frame*gain/maxmov)
+            cv2.imshow('frame',(offset+frame)*gain/maxmov)
             if cv2.waitKey(int(frate*1000)) & 0xFF == ord('q'):
                 cv2.destroyAllWindows()
                 break  
@@ -240,10 +265,10 @@ class XMovie(object):
     def crop(self,crop_left,crop_right,crop_top,crop_bottom,crop_begin=0,crop_end=1):
         """ Crop movie        
         """
-        return XMovie(mat=self.mov[crop_begin:-crop_end,crop_left:-crop_right,crop_top:-crop_bottom],frameRate=self.frameRate)
+        self.mov=self.mov[crop_begin:-crop_end,crop_left:-crop_right,crop_top:-crop_bottom]
         
         
-    def computeDFF(self,secsWindow=5,quantilMin=.8,subtract_minimum=False,squared_F=True):
+    def computeDFF(self,secsWindow=5,quantilMin=8,subtract_minimum=False,squared_F=True):
         """ 
         compute the DFF of the movie
         In order to compute the baseline frames are binned according to the window length parameter
@@ -254,25 +279,25 @@ class XMovie(object):
         quantilMin : value of the quantile
 
         """
-        mov=self.mov
+        
         print "computing minimum ..."; sys.stdout.flush()
-        minmov=np.min(mov)
+        minmov=np.min(self.mov)
         if subtract_minimum:
-            mov=mov-np.min(mov)+.1
-            minmov=np.min(mov)
+            self.mov=self.mov-np.min(self.mov)+.1
+            minmov=np.min(self.mov)
 
         assert(minmov>0),"All pixels must be nonnegative"                       
-        numFrames,linePerFrame,pixPerLine=np.shape(mov)
+        numFrames,linePerFrame,pixPerLine=np.shape(self.mov)
         downsampfact=int(secsWindow/self.frameRate);
         elm_missing=int(np.ceil(numFrames*1.0/downsampfact)*downsampfact-numFrames)
         padbefore=np.floor(elm_missing/2.0)
         padafter=np.ceil(elm_missing/2.0)
-        print 'Inizial Size Image:' + np.str(np.shape(mov)); sys.stdout.flush()
-        mov=np.pad(mov,((padbefore,padafter),(0,0),(0,0)),mode='reflect')
-        numFramesNew,linePerFrame,pixPerLine=np.shape(mov)
+        print 'Inizial Size Image:' + np.str(np.shape(self.mov)); sys.stdout.flush()
+        self.mov=np.pad(self.mov,((padbefore,padafter),(0,0),(0,0)),mode='reflect')
+        numFramesNew,linePerFrame,pixPerLine=np.shape(self.mov)
         #% compute baseline quickly
         print "binning data ..."; sys.stdout.flush()
-        movBL=np.reshape(mov,(downsampfact,int(numFramesNew/downsampfact),linePerFrame,pixPerLine));
+        movBL=np.reshape(self.mov,(downsampfact,int(numFramesNew/downsampfact),linePerFrame,pixPerLine));
         movBL=np.percentile(movBL,quantilMin,axis=0);
         print "interpolating data ..."; sys.stdout.flush()   
         print movBL.shape        
@@ -280,13 +305,12 @@ class XMovie(object):
         
         #% compute DF/F
         if squared_F:
-            movDFF=(mov-movBL)/np.sqrt(movBL)
+            self.mov=(self.mov-movBL)/np.sqrt(movBL)
         else:
-            movDFF=(mov-movBL)/movBL
+            self.mov=(self.mov-movBL)/movBL
             
-        movDFF=movDFF[padbefore:-padafter,:,:]; 
-        print 'Final Size Movie:' +  np.str(movDFF.shape)
-        return XMovie(mat=movDFF,frameRate=self.frameRate),movBL   
+        self.mov=self.mov[padbefore:len(movBL)-padafter,:,:]; 
+        print 'Final Size Movie:' +  np.str(self.mov.shape)          
         
     def extractROIsFromPCAICA(self,spcomps, numSTD=4, gaussiansigmax=2 , gaussiansigmay=2):
         """
@@ -323,14 +347,42 @@ class XMovie(object):
         
         
     def save_mov(self, filename, shifts=None, zoom=False, zoom_too=False):
+         print "to be implemented"
+#        if zoom:
+#            self.mov = zoom(self.mov, [0.2, 1, 1])
+#        tifffile = TIFF.open(filename+'.tif', mode='w')
+#        tifffile.write_image(self.mov)
+#        tifffile.close()
+#        if zoom_too:
+#            self.mov = szoom(self.mov, [0.2, 1, 1])
+#            tifffile = TIFF.open(filename+'_z_.tif', mode='w')
+#            tifffile.write_image(self.mov)
+#            tifffile.close()
+            
+    def resize(self,fx=1,fy=1,fz=1,interpolation=cv2.INTER_AREA):  
+        """
+        resize movies along axis and interpolate or lowpass when necessary
         
-        if zoom:
-            self.mov = zoom(self.mov, [0.2, 1, 1])
-        tifffile = TIFF.open(filename+'.tif', mode='w')
-        tifffile.write_image(self.mov)
-        tifffile.close()
-        if zoom_too:
-            self.mov = szoom(self.mov, [0.2, 1, 1])
-            tifffile = TIFF.open(filename+'_z_.tif', mode='w')
-            tifffile.write_image(self.mov)
-            tifffile.close()
+        Parameters
+        -------------------
+        fx,fy,fz:fraction/multiple of dimension (.5 means the image will be half the size)
+        interpolation=cv2.INTER_AREA. Set to none if you do not want interpolation or lowpass
+        
+
+        """              
+        if fx!=1 or fy!=1:
+            print "reshaping along x and y"
+            t,h,w=self.mov.shape
+            newshape=(int(h*fx),int(w*fy))
+            mov=[];
+            print(newshape)
+            for frame in self.mov:                
+                mov.append(cv2.resize(frame,newshape,fx=fx,fy=fy,interpolation=interpolation))
+            self.mov=np.asarray(mov)
+        if fz!=1:
+            print "reshaping along z"            
+            t,h,w=self.mov.shape
+            self.mov=np.reshape(self.mov,(t,h*w))
+            self.mov=cv2.resize(self.mov,(h*w,int(fz*t)),fx=1,fy=fz,interpolation=interpolation)
+            self.mov=np.reshape(self.mov,(int(fz*t),w,h))
+            self.frameRate=self.frameRate/fz

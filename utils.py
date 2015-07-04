@@ -14,7 +14,7 @@ import numpy as np
 #%%
 def playMatrix(mov,gain=1.0,frate=.033):
     for frame in mov: 
-        cv2.imshow('frame',frame*gain/np.max(frame))
+        cv2.imshow('frame',frame*gain)
         if cv2.waitKey(int(frate*1000)) & 0xFF == ord('q'):
             cv2.destroyAllWindows()
             break  
