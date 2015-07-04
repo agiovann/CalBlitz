@@ -17,8 +17,9 @@ plt.ion()
 import numpy as np
 #%% define movie
 filename='k26_v1_176um_target_pursuit_001_005.tif'
+#filename='M_FLUO.tif'
 filename_mc=filename[:-4]+'_mc.npy'
-filename_analysis=filename[:-4]+'_analysis.npz'
+filename_analysis=filename[:-4]+'_analysis.npz'    
 #%%
 #m=XMovie('M_FLUO.tif', frameRate=.064);
 #m=XMovie('M_FLUO_1.tif', frameRate=.064);
@@ -48,7 +49,7 @@ fy=.5;
 fz=.2;
 m.resize(fx=fx,fy=fy,fz=fx)
 #%% example plot movie
-m.playMovie(frate=.03,gain=6.0,offset=100,magnification=1)
+m.playMovie(frate=.03,gain=6.0,offset=0,magnification=1)
 #%% example plot a frame
 plt.imshow(m.mov[100],cmap=plt.cm.Greys_r)
 
@@ -67,7 +68,18 @@ print 'elapsed time:' + str(time.time()-initTime)
 #%% extract ROIs from spatial components 
 masks=m.extractROIsFromPCAICA(spcomps, numSTD=8, gaussiansigmax=2 , gaussiansigmay=2)
 #%%  extract single ROIs from each mask
-allMasks=[np.array(mm==ll) for mm in masks  for ll in xrange(np.max(mm)) if 2000>np.sum(np.array(mm==ll))>10   ]
+minPixels=30;
+maxPixels=1000;
+allMasks=[];
+for mask in masks:
+    #print np.max(mask)
+    for ll in xrange(1,np.max(mask)+1):        
+        numPixels=np.sum(np.array(mask==ll));        
+        if (numPixels>minPixels and numPixels<maxPixels):
+            print numPixels
+            numPixels=np.sum(np.array(mask==ll));
+            allMasks.append(mask>0)           
+#allMasks=[mm==ll for ll in range(1,np.max(mm)+1) if (np.sum(np.array(mm==ll))>0)  for mm in masks]
 allMasks=np.asarray(allMasks,dtype=np.float16)
 print allMasks.shape
 #%%
@@ -75,22 +87,26 @@ allMasksForPlot=[kk*ii*1.0 for ii,kk in enumerate(allMasks)]
 plt.imshow(np.max(np.asarray(allMasksForPlot,dtype=np.float16),axis=0))
 #%%
 np.savez(filename_analysis,allMasks=allMasks,shifts=shifts,templates=templates,spcomps=spcomps,max_shift=max_shift,fx=fx,fy=fy,fz=fz)
-#%% create masks:here you should divide each of the masks (neurons found in one component) according to your taste
-
-
+#%% if reload results
+reload_files=True
+if reload_files: 
+    m=XMovie(mat=np.load(filename_mc), frameRate=.033);
+    vars_=np.load(filename_analysis)
+    max_shift=vars_['max_shift']
+    allMasks=vars_['allMasks']
+    spcomps=vars_['spcomps']
+    fx=vars_['fx']
+    fy=vars_['fy']
+    fz=vars_['fz']
 
 #%% load and extract traces
 initTime=time.time()
 minPercentileRemove=1;
-m=XMovie(mat=np.load(filename_mc), frameRate=.033);
 m.mov=m.mov-np.percentile(m.mov,minPercentileRemove);
-vars_=np.load(filename_analysis)
-max_shift=vars_['max_shift']
-allMasks=vars_['allMasks']
 m.crop(max_shift,max_shift,max_shift,max_shift)
 #%% reshape dendrites 
 mdend=XMovie(mat=np.asarray(allMasks,dtype=np.float32), frameRate=1);
-mdend.resize(fx=2,fy=2)
+mdend.resize(fx=1/fx,fy=1/fy)
 allMasks=mdend.mov;
 #%% reshape movie and mask to conveniently compute DFF
 T,h,w=m.mov.shape
@@ -118,7 +134,7 @@ tracesDFF=np.asarray(tracesDFF)
 #%% visualize traces
 plt.plot(tracesDFF[1:20].T)
 #%% visualize traces imagesc style
-plt.imshow(tracesDFF,aspect='auto',vmax=1.5) 
+plt.imshow(tracesDFF,aspect='auto',vmax=1.5,interpolation='None') 
 
 
 
