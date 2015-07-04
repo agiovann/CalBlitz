@@ -92,9 +92,10 @@ You should have received a copy of the GNU General Public License along with thi
 ## Troubleshooting
 
 1. Depending on terminal program used anaconda may not be in default path. In this case, add anaconda to bin to path: 
+
 ```
 export PATH=//anaconda/bin:$PATH
-``
+```
 
 2. Error: No packages found in current osx­64 channels matching: pims
  install pip: conda install pip
