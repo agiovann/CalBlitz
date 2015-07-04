@@ -62,7 +62,7 @@ conda install opencv
 
 ```
 For opencv windows installation check [here]( 
-[http://opencv-python-tutroals.readthedocs.org/en/latest/py_tutorials/py_setup/py_setup_in_windows/py_setup_in_windows.html)
+http://opencv-python-tutroals.readthedocs.org/en/latest/py_tutorials/py_setup/py_setup_in_windows/py_setup_in_windows.html)
 
 If you have problems installing opencv remember to match your architecture (32/64 bits) and to make sure that you have the required libraries installed
 
