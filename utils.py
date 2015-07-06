@@ -11,6 +11,7 @@ import cv2
 import scipy.ndimage
 import warnings
 import numpy as np
+from pylab import plt
 #%%
 def playMatrix(mov,gain=1.0,frate=.033):
     for frame in mov: 
@@ -19,6 +20,14 @@ def playMatrix(mov,gain=1.0,frate=.033):
             cv2.destroyAllWindows()
             break  
     cv2.destroyAllWindows()        
+#%% montage
+def matrixMontage(spcomps):
+    numcomps, width, height=spcomps.shape
+    rowcols=int(np.ceil(np.sqrt(numcomps)));           
+    for k,comp in enumerate(spcomps):        
+        plt.subplot(rowcols,rowcols,k+1)       
+        plt.imshow(comp,cmap=plt.cm.gray)                             
+        plt.axis('off')         
         
 #%%
 #def computeDFF(mov,frameRate,maxshift,secsWindow=5,quantilMin=.8,):
