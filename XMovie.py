@@ -12,7 +12,7 @@ import pims
 import scipy.ndimage
 import warnings
 import numpy as np
-from sklearn.decomposition import IncrementalPCA, FastICA
+from sklearn.decomposition import NMF,IncrementalPCA, FastICA
 import pylab as plt
 plt.ion()
 from scipy.ndimage.filters import gaussian_filter
@@ -27,8 +27,14 @@ import functools
 #%%
 class XMovie(object):
     """ 
-    Class representing a movie 
+    Class representing a movie. Only need to provide the path to the tif file. 
 
+    Example of usage
+    
+    filename='filename_tiff.tif'
+    frameRate=you_frame_rate
+    m=XMovie(filename, frameRate=frameRate);
+    
     Parameters
     ----------
     filename : name of the tiff file
@@ -52,29 +58,72 @@ class XMovie(object):
         else:
             raise Exception('You need to specify the frame rate')
     
-#    def create(self,itemType,itemName,*args,**kwargs):       
-#        print "Creating Item %s with name %s, args %r and kwargs %r" % (itemType,itemName,args,kwargs)
-#
-#    def __getattr__(self,attrName):        
-#        try: 
-#            return eval('self.mov.'+ attrName)
-#        except:          
-##            return eval('self.mov.'+ attrName)
-#            return functools.partial(self.create,attrName)
-#    def create(self,itemType,itemName,*args,**kwargs):       
-#        print type(itemType),type(itemName),type(args),type(kwargs)
-#
-#    def __getattr__(self,attrName):        
-#        try: 
-#            return eval('self.mov.'+ attrName)
-#        except:          
-##            return eval('self.mov.'+ attrName)
-#            return functools.partial(self.create,attrName)            
+    ################ STATIC METHODS
+    @staticmethod
+    def extractROIsFromPCAICA(spcomps, numSTD=4, gaussiansigmax=2 , gaussiansigmay=2):
+        """
+        Given the spatial components output of the IPCA_stICA function extract possible regions of interest
+        The algorithm estimates the significance of a components by thresholding the components after gaussian smoothing
+        Parameters
+        -----------
+        spcompomps, 3d array containing the spatial components
+        numSTD: number of standard deviation above the mean of the spatial component to be considered signiificant
+        """        
         
+        numcomps, width, height=spcomps.shape
+        rowcols=int(np.ceil(np.sqrt(numcomps)));        
+        #%%
+        mask=[];
+        for k in xrange(0,numcomps):
+            comp=spcomps[k]
+#            plt.subplot(rowcols,rowcols,k+1)
+            comp=gaussian_filter(comp,[gaussiansigmay,gaussiansigmax])
+            
+            maxc=np.percentile(comp,99);
+            minc=np.percentile(comp,1);
+            comp=np.sign(maxc-np.abs(minc))*comp;
+            q75, q25 = np.percentile(comp, [75 ,25])
+            iqr = q75 - q25
+            minCompValue=np.median(comp)+numSTD*iqr/1.35;            
+            compabs=comp*(comp>minCompValue);
+            #height, width = compabs.shape
+            labeled, n = label(compabs>0, np.ones((3,3)))
+            mask.append(labeled) 
+#            plt.imshow(labeled)                             
+#            plt.axis('off')         
+        return mask
+           
+   
+    
+    ################ PUBLIC METHODS
+    
+    def append(self,mov):
+        """
+        Append the movie mov to the object
         
-#    def __call__(self,*args,**kw):
-#        print args
+        Parameters
+        ---------------------------
+        mov: XMovie object
+        """        
+        self.mov=np.append(self.mov,mov.mov,axis=0)     
+    
+    def applyShifstToMovie(self, shifts):
+        """ 
+        Apply precomputed shifts to a movie, using subpixels adjustment (cv2.INTER_CUBIC function)
         
+        Parameters
+        ------------
+        shifts: array of tuples representing x and y shifts for each frame        
+        
+        """
+        t,h,w=self.mov.shape
+        for i,frame in enumerate(self.mov):
+             if i%100==99:
+                 print "Frame %i"%(i+1); 
+             sh_x_n, sh_y_n = shifts[i]
+             M = np.float32([[1,0,sh_y_n],[0,1,sh_x_n]])                 
+             self.mov[i] = cv2.warpAffine(frame,M,(h,w),flags=cv2.INTER_CUBIC)
+             
     def motion_correct(self, max_shift=5, show_movie=False,template=None):
         """
         Performs motion corretion using the opencv matchtemplate function. At every iteration a template is built by taking the median of all frames and then used to align the other frames.
@@ -96,7 +145,7 @@ class XMovie(object):
         n_frames_,h_i, w_i = self.mov.shape
         
         ms = max_shift
-        if template == None:
+        if template is None:
             template=np.median(self.mov,axis=0)            
             template=template[ms:h_i-ms,ms:w_i-ms].astype(np.float32)
             
@@ -147,22 +196,30 @@ class XMovie(object):
                      break  
         cv2.destroyAllWindows()
         return (template,shifts)
-#             mc=MotionCorrector(mov=np.float32(self.mov), max_shift=max_shift, show_movie=False, sub_pixel=True)
-#             templates,shifts = mc.correct(n_iters)
-#             newmov=XMovie(mat=mc.get_motcor_mov(),frameRate=self.frameRate)
-#             return newmov,shifts,templates
+
              
 
     def makeSubMov(self,frames):        
-        mm=self.mov[frames,:,:]
-        frate=self.frameRate
-        return XMovie(mat=mm,frameRate=frate)
+        self.mov=self.mov[frames,:,:]
+
     
+    
+    def NonnegativeMatrixFactorization(self,n_components=30, init='nndsvd', beta=1,tol=5e-7, sparseness='components'):
+        T,h,w=self.mov.shape
+        Y=np.reshape(self.mov,(T,h*w))
+        Y=Y-np.percentile(Y,1)
+        Y=np.clip(Y,0,np.Inf)
+        estimator=NMF(n_components=n_components, init=init, beta=beta,tol=tol, sparseness=sparseness)
+        estimator.fit(Y)
+        components_ = estimator.components_        
+        nmf_masks=np.reshape(components_,(n_components,h,w))
+        return nmf_masks
         
+    
     def plotFrame(self,numFrame):
         plt.imshow(self.mov[numFrame],cmap=plt.cm.Greys_r)
         
-    def IPCA_stICA(self, components = 50, batch = 1000, mu = 0.05, ICAfun = 'logcosh'):
+    def IPCA_stICA(self, components = 50, batch = 1000, mu = 1, ICAfun = 'logcosh'):
         # Parameters:
         #   mov [frames, height, width]
         #     = array form of movie
@@ -233,9 +290,7 @@ class XMovie(object):
         ind_frames = np.reshape(ind_frames.T, (components, h, w))
         
         return ind_frames  
-        
-    def compute_PCAICA(self,numSVDComponents=50,numICAComponents=50):
-        print "to do"
+
         
     def compute_StructuredNMFactorization(self):
         print "to do"
@@ -312,52 +367,10 @@ class XMovie(object):
         self.mov=self.mov[padbefore:len(movBL)-padafter,:,:]; 
         print 'Final Size Movie:' +  np.str(self.mov.shape)          
         
-    def extractROIsFromPCAICA(self,spcomps, numSTD=4, gaussiansigmax=2 , gaussiansigmay=2):
-        """
-        Given the spatial components output of the IPCA_stICA function extract possible regions of interest
-        The algorithm estimates the significance of a components by thresholding the components after gaussian smoothing
-        Parameters
-        -----------
-        spcompomps, 3d array containing the spatial components
-        numSTD: number of standard deviation above the mean of the spatial component to be considered signiificant
-        """        
-        
-        numcomps, width, height=spcomps.shape
-        rowcols=int(np.ceil(np.sqrt(numcomps)));        
-        #%%
-        mask=[];
-        for k in xrange(0,numcomps):
-            comp=spcomps[k]
-            plt.subplot(rowcols,rowcols,k+1)
-            comp=gaussian_filter(comp,[gaussiansigmay,gaussiansigmax])
-            
-            maxc=np.percentile(comp,99);
-            minc=np.percentile(comp,1);
-            comp=np.sign(maxc-np.abs(minc))*comp;
-            q75, q25 = np.percentile(comp, [75 ,25])
-            iqr = q75 - q25
-            minCompValue=np.median(comp)+numSTD*iqr/1.35;            
-            compabs=comp*(comp>minCompValue);
-            #height, width = compabs.shape
-            labeled, n = label(compabs>0, np.ones((3,3)))
-            mask.append(labeled) 
-            plt.imshow(labeled)                             
-            plt.axis('off')         
-        return mask
+    
         
         
-    def save_mov(self, filename, shifts=None, zoom=False, zoom_too=False):
-         print "to be implemented"
-#        if zoom:
-#            self.mov = zoom(self.mov, [0.2, 1, 1])
-#        tifffile = TIFF.open(filename+'.tif', mode='w')
-#        tifffile.write_image(self.mov)
-#        tifffile.close()
-#        if zoom_too:
-#            self.mov = szoom(self.mov, [0.2, 1, 1])
-#            tifffile = TIFF.open(filename+'_z_.tif', mode='w')
-#            tifffile.write_image(self.mov)
-#            tifffile.close()
+   
             
     def resize(self,fx=1,fy=1,fz=1,interpolation=cv2.INTER_AREA):  
         """
