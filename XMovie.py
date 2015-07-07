@@ -219,10 +219,47 @@ class XMovie(object):
     def plotFrame(self,numFrame):
         plt.imshow(self.mov[numFrame],cmap=plt.cm.Greys_r)
         
-    def IPCA_stICA(self, components = 50, batch = 1000, mu = 1, ICAfun = 'logcosh'):
+
+    def IPCA(self, components = 50, batch =1000):
+
         # Parameters:
-        #   mov [frames, height, width]
-        #     = array form of movie
+        #   components (default 50)
+        #     = number of independent components to return
+        #   batch (default 1000)
+        #     = number of pixels to load into memory simultaneously
+        #       in IPCA. More requires more memory but leads to better fit
+
+
+        # vectorize the images
+        num_frames, h, w = np.shape(self.mov);
+        frame_size = h * w;
+        frame_samples = np.reshape(self.mov, (num_frames, frame_size)).T
+        
+        # run IPCA to approxiate the SVD
+        
+        ipca_f = IncrementalPCA(n_components=components, batch_size=batch)
+        ipca_f.fit(frame_samples)
+        
+        # construct the reduced version of the movie vectors using only the 
+        # principal component projection
+        
+        proj_frame_vectors = ipca_f.inverse_transform(ipca_f.transform(frame_samples))
+            
+        # get the temporal principal components (pixel time series) and 
+        # associated singular values
+        
+        eigenseries = ipca_f.components_.T
+
+        # the rows of eigenseries are approximately orthogonal
+        # so we can approximately obtain eigenframes by multiplying the 
+        # projected frame matrix by this transpose on the right
+        
+        eigenframes = np.dot(proj_frame_samples, eigenseries)
+
+        return eigenseries, eigenframes, proj_frame_vectors        
+    
+    def IPCA_stICA(self, components = 50, batch = 1000, mu = 0.05, ICAfun = 'logcosh'):
+        # Parameters:
         #   components (default 50)
         #     = number of independent components to return
         #   batch (default 1000)
@@ -238,34 +275,7 @@ class XMovie(object):
         #   ind_frames [components, height, width]
         #     = array of independent component "eigenframes"
     
-        
-        # vectorize the images
-        num_frames, h, w = np.shape(self.mov);
-        frame_size = h * w;
-        frame_samples = np.reshape(self.mov, (num_frames, frame_size)).T
-        
-        # run IPCA to approxiate the SVD
-        
-        ipca_f = IncrementalPCA(n_components=components, batch_size=batch)
-        ipca_f.fit(frame_samples)
-        
-        # construct the reduced version of the movie using only the principal
-        # component projection
-        
-        proj_frame_samples = ipca_f.inverse_transform(ipca_f.transform(frame_samples))
-            
-        # get the temporal principal components (pixel time series) and 
-        # associated singular values
-        
-        svs = ipca_f.singular_values_
-        eigenseries = ipca_f.components_.T
-        
-        # the rows of eigenseries are approximately orthogonal
-        # so we can approximately obtain eigenframes by multiplying the 
-        # projected frame matrix by this transpose on the right
-        
-        eigenframes = np.dot(proj_frame_samples, eigenseries)
-        
+        eigenseries, eigenframes = self.IPCA(components, batch)
         # normalize the series
     
         frame_scale = mu / np.max(eigenframes)
@@ -291,11 +301,40 @@ class XMovie(object):
         
         return ind_frames  
 
+
+    def IPCA_denoise(self, components = 50, batch = 1000):
+        _, _, clean_vectors = self.IPCA(components, batch)
+        self.mov = np.reshape(clean_vectors.T, np.shape(self.mov))
+                
         
     def compute_StructuredNMFactorization(self):
         print "to do"
         
    
+    def local_correlations(self):
+         # Output:
+         #   rho M x N matrix, cross-correlation with adjacent pixel
+
+         rho = np.zeros(np.shape(self.mov)[1:3])
+         w_mov = (self.mov - np.mean(self.mov, axis = 0))/np.std(self.mov, axis = 0)
+ 
+         rho_h = np.mean(np.multiply(w_mov[:,:-1,:], w_mov[:,1:,:]), axis = 0)
+         rho_w = np.mean(np.multiply(w_mov[:,:,:-1], w_mov[:,:,1:,]), axis = 0)
+
+         rho[:-1,:] = rho[:-1,:] + rho_h
+         rho[1:,:] = rho[1:,:] + rho_h
+         rho[:,:-1] = rho[:,:-1] + rho_w
+         rho[:,1:] = rho[:,1:] + rho_w
+
+         neighbors = 4 * np.ones(np.shape(self.mov)[1:3])        
+         neighbors[0,:] = neighbors[0,:] - 1;
+         neighbors[-1,:] = neighbors[-1,:] - 1;
+         neighbors[:,0] = neighbors[:,0] - 1;
+         neighbors[:,-1] = neighbors[:,-1] - 1;
+
+         rho = np.divide(rho, neighbors)
+
+         return rho
     
     def playMovie(self,gain=1.0,frate=None,magnification=2,offset=0):
          """
