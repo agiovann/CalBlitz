@@ -8,6 +8,7 @@ Created on Wed Jul  1 09:02:06 2015
 #%load_ext autoreload
 #%autoreload 2
 import cv2
+import copy
 import pims
 import scipy.ndimage
 import warnings
@@ -254,9 +255,13 @@ class XMovie(object):
         # so we can approximately obtain eigenframes by multiplying the 
         # projected frame matrix by this transpose on the right
         
-        eigenframes = np.dot(proj_frame_samples, eigenseries)
+        eigenframes = np.dot(proj_frame_vectors, eigenseries)
 
         return eigenseries, eigenframes, proj_frame_vectors        
+    
+    def copy(self):
+        """ Create copy of the object"""
+        return copy.copy(self)    
     
     def IPCA_stICA(self, components = 50, batch = 1000, mu = 0.05, ICAfun = 'logcosh'):
         # Parameters:

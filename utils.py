@@ -21,12 +21,12 @@ def playMatrix(mov,gain=1.0,frate=.033):
             break  
     cv2.destroyAllWindows()        
 #%% montage
-def matrixMontage(spcomps):
+def matrixMontage(spcomps,*args, **kwargs):
     numcomps, width, height=spcomps.shape
     rowcols=int(np.ceil(np.sqrt(numcomps)));           
     for k,comp in enumerate(spcomps):        
         plt.subplot(rowcols,rowcols,k+1)       
-        plt.imshow(comp,cmap=plt.cm.gray)                             
+        plt.imshow(comp,*args, **kwargs)                             
         plt.axis('off')         
         
 #%%

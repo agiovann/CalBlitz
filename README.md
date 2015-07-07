@@ -46,7 +46,7 @@ Recent advances in calcium imaging acquisition techniques are creating datasets 
 
 ## Installation
 
-Prerequisites
+###Prerequisites
 
 install anaconda python distribution, then in your terminal type
 
@@ -57,8 +57,8 @@ conda install PIL
 conda install ipython 
 conda install pip
 pip install pims
-conda install scikit­learn
-conda install opencv 
+conda install scikit­-learn #(or pip install scikit-learn)
+conda install opencv #(this will not work on windows)
 
 ```
 For opencv windows installation check [here]( 
@@ -66,7 +66,17 @@ http://opencv-python-tutroals.readthedocs.org/en/latest/py_tutorials/py_setup/py
 
 If you have problems installing opencv remember to match your architecture (32/64 bits) and to make sure that you have the required libraries installed
 
-Just add the CalBlitz folder to your Python path (or call the script from within the library). We suggest to use spyder to run the example code in *ExamplePipeline.py*. Each [code cell](https://pythonhosted.org/spyder/editor.html#how-to-define-a-code-cell) is a unit that should be run and the result inspected. This package is supposed to be used interactively, a la [MATLAB](http://www.mathworks.com).   
+### Install the package
+
+clone the git package 
+
+git clone https://github.com/agiovann/CalBlitz.git
+
+or download the zipped version 
+ 
+ 
+
+Add the CalBlitz folder to your Python path (or call the script from within the library). We suggest to use spyder to run the example code in *ExamplePipeline.py*. Each [code cell](https://pythonhosted.org/spyder/editor.html#how-to-define-a-code-cell) is a unit that should be run and the result inspected. This package is supposed to be used interactively, like in [MATLAB](http://www.mathworks.com).   
 
 ## API Reference
 
@@ -101,9 +111,20 @@ export PATH=//anaconda/bin:$PATH
  install pip: conda install pip
 ­ use pip to install pims: pip install pims
 ­ if pims causes kernel crash then use 
+
  ```
  pip install pims ­­--upgrade
  ```
+ 
+3. If you get another compile time error installing pims, install the following 
+
+[Microsoft C++ ompiler for Python](https://www.microsoft.com/en-us/download/confirmation.aspx?id=44266)
+
+by typing 
+
+``` 
+msiexec /i <path to downloaded MSI File> ALLUSERS=1 
+```
 
 
 ­
