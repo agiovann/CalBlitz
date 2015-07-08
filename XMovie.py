@@ -60,6 +60,7 @@ class XMovie(object):
             raise Exception('You need to specify the frame rate')
     
     ################ STATIC METHODS
+    #%%
     @staticmethod
     def extractROIsFromPCAICA(spcomps, numSTD=4, gaussiansigmax=2 , gaussiansigmay=2):
         """
@@ -72,9 +73,11 @@ class XMovie(object):
         """        
         
         numcomps, width, height=spcomps.shape
-        rowcols=int(np.ceil(np.sqrt(numcomps)));        
-        #%%
-        mask=[];
+        rowcols=int(np.ceil(np.sqrt(numcomps)));  
+        
+        #%
+        allMasks=[];
+        maskgrouped=[];
         for k in xrange(0,numcomps):
             comp=spcomps[k]
 #            plt.subplot(rowcols,rowcols,k+1)
@@ -82,21 +85,34 @@ class XMovie(object):
             
             maxc=np.percentile(comp,99);
             minc=np.percentile(comp,1);
-            comp=np.sign(maxc-np.abs(minc))*comp;
+#            comp=np.sign(maxc-np.abs(minc))*comp;
             q75, q25 = np.percentile(comp, [75 ,25])
             iqr = q75 - q25
-            minCompValue=np.median(comp)+numSTD*iqr/1.35;            
-            compabs=comp*(comp>minCompValue);
+            minCompValuePos=np.median(comp)+numSTD*iqr/1.35;  
+            minCompValueNeg=np.median(comp)-numSTD*iqr/1.35;            
+
+            # got both positive and negative large magnitude pixels
+            compabspos=comp*(comp>minCompValuePos)-comp*(comp<minCompValueNeg);
+
+
             #height, width = compabs.shape
-            labeled, n = label(compabs>0, np.ones((3,3)))
-            mask.append(labeled) 
+            labeledpos, n = label(compabspos>0, np.ones((3,3)))
+            maskgrouped.append(labeledpos)
+            for jj in range(1,n+1):
+                tmp_mask=np.asarray(labeledpos==jj)
+                allMasks.append(tmp_mask)
+#            labeledneg, n = label(compabsneg>0, np.ones((3,3)))
+#            maskgrouped.append(labeledneg)
+#            for jj in range(n):
+#                tmp_mask=np.asarray(labeledneg==jj)
+#                allMasks.append(tmp_mask)
 #            plt.imshow(labeled)                             
 #            plt.axis('off')         
-        return mask
+        return allMasks,maskgrouped
            
    
-    
-    ################ PUBLIC METHODS
+    #%%
+    ################ PUBLIC METHODS            
     
     def append(self,mov):
         """
@@ -124,7 +140,45 @@ class XMovie(object):
              sh_x_n, sh_y_n = shifts[i]
              M = np.float32([[1,0,sh_y_n],[0,1,sh_x_n]])                 
              self.mov[i] = cv2.warpAffine(frame,M,(h,w),flags=cv2.INTER_CUBIC)
-             
+     
+
+    def extract_traces_from_masks(self,masks,type=None,window_sec=5,minQuantile=20):
+        """
+                
+        
+        Parameters
+        ----------------------
+        masks: array, 3D with each 2D slice bein a mask (integer or fractional)  
+        type: extracted fluorescence trace, if 'DFF' it will also extract DFF
+        Outputs
+        ----------------------
+        traces: array, 2D of fluorescence traces
+        tracesDFF: rray, 2D of DF/F traces
+        """
+        T,h,w=self.mov.shape
+        Y=np.reshape(self.mov,(T,h*w))
+        nA,_,_=masks.shape
+        A=np.reshape(masks,(nA,h*w))
+        pixelsA=np.sum(A,axis=1)
+        A=A/pixelsA[:,None] # obtain average over ROI
+        traces=np.dot(A,np.transpose(Y))
+        
+        if type == 'DFF':
+            window=int(window_sec/self.frameRate);            
+            assert window <= T, "The window must be shorter than the total length"
+            tracesDFF=[]
+            for trace in traces:
+                traceBL=[np.percentile(trace[i:i+window],minQuantile) for i in xrange(1,len(trace)-window)]
+                missing=np.percentile(trace[-window:],minQuantile);
+                missing=np.repeat(missing,window+1)
+                traceBL=np.concatenate((traceBL,missing))
+                tracesDFF.append((trace-traceBL)/traceBL)
+            tracesDFF=np.asarray(tracesDFF)
+        else:
+            tracesDFF=None
+            
+        return traces.T,tracesDFF.T
+        
     def motion_correct(self, max_shift=5, show_movie=False,template=None):
         """
         Performs motion corretion using the opencv matchtemplate function. At every iteration a template is built by taking the median of all frames and then used to align the other frames.
@@ -211,11 +265,13 @@ class XMovie(object):
         Y=Y-np.percentile(Y,1)
         Y=np.clip(Y,0,np.Inf)
         estimator=NMF(n_components=n_components, init=init, beta=beta,tol=tol, sparseness=sparseness)
-        estimator.fit(Y)
+        time_components=estimator.fit_transform(Y)
         components_ = estimator.components_        
-        nmf_masks=np.reshape(components_,(n_components,h,w))
-        return nmf_masks
+        space_components=np.reshape(components_,(n_components,h,w))
+        return space_components,time_components
         
+    
+    
     
     def plotFrame(self,numFrame):
         plt.imshow(self.mov[numFrame],cmap=plt.cm.Greys_r)
@@ -280,7 +336,7 @@ class XMovie(object):
         #   ind_frames [components, height, width]
         #     = array of independent component "eigenframes"
     
-        eigenseries, eigenframes = self.IPCA(components, batch)
+        eigenseries, eigenframes,_proj = self.IPCA(components, batch)
         # normalize the series
     
         frame_scale = mu / np.max(eigenframes)
@@ -300,7 +356,8 @@ class XMovie(object):
         joint_ics = ica.fit_transform(eigenstuff)
     
         # extract the independent frames
-    
+        num_frames, h, w = np.shape(self.mov);
+        frame_size = h * w;
         ind_frames = joint_ics[:frame_size, :]
         ind_frames = np.reshape(ind_frames.T, (components, h, w))
         
@@ -430,7 +487,7 @@ class XMovie(object):
         if fx!=1 or fy!=1:
             print "reshaping along x and y"
             t,h,w=self.mov.shape
-            newshape=(int(h*fx),int(w*fy))
+            newshape=(int(w*fy),int(h*fx))
             mov=[];
             print(newshape)
             for frame in self.mov:                
@@ -441,5 +498,6 @@ class XMovie(object):
             t,h,w=self.mov.shape
             self.mov=np.reshape(self.mov,(t,h*w))
             self.mov=cv2.resize(self.mov,(h*w,int(fz*t)),fx=1,fy=fz,interpolation=interpolation)
-            self.mov=np.reshape(self.mov,(int(fz*t),w,h))
+            self.mov=cv2.resize(self.mov,(h*w,int(fz*t)),fx=1,fy=fz,interpolation=interpolation)
+            self.mov=np.reshape(self.mov,(int(fz*t),h,w))
             self.frameRate=self.frameRate/fz
