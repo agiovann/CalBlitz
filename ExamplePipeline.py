@@ -79,7 +79,6 @@ for j in range(0,num_iter):
 
 plt.plot(np.asarray(shifts).reshape((j+1)*shift.shape[0],shift.shape[1]))
 
-#%% RELOAD MOTION CORRECTED MOVIE
 
 
 #%% apply shifts to another channel, you need to reload the original movie other channel (mov_other_channel)
@@ -96,7 +95,7 @@ plt.imshow(templates[-1],cmap=plt.cm.Greys_r,vmin=minBrightness,vmax=maxBrightne
 #%% save motion corrected movie inpython format along with the results. This takes some time now but will save  a lot later...
 np.savez(filename_mc,mov=m.mov,frameRate=frameRate,templates=templates,shifts=shifts,max_shift=max_shift)
 
-#%% RELOAD Motion Corrected Movie
+#%% RELOAD MOTION CORRECTED MOVIE
 m=XMovie(mat=np.load(filename_mc)['mov'], frameRate=frameRate);    
 
 #%% crop movie after motion correction. 
@@ -122,6 +121,8 @@ initTime=time.time()
 m.computeDFF(secsWindow=5,quantilMin=40,subtract_minimum=True)
 print 'elapsed time:' + str(time.time()-initTime) 
 
+#%% compute subregions where to apply more efficiently facrtorization algorithms
+fovs, mcoef, distanceMatrix=m.partition_FOV_KMeans(tradeoff_weight=.5,fx=.25,fy=.25,n_clusters=4,max_iter=500);
 
 #%% create a denoised version of the movie, nice to visualize
 if True:

@@ -14,6 +14,8 @@ import scipy.ndimage
 import warnings
 import numpy as np
 from sklearn.decomposition import NMF,IncrementalPCA, FastICA
+from sklearn.cluster import KMeans
+from sklearn.metrics.pairwise import euclidean_distances
 import pylab as plt
 plt.ion()
 from scipy.ndimage.filters import gaussian_filter
@@ -44,7 +46,7 @@ class XMovie(object):
     
     def __init__(self, filename=None, mat=None, frameRate=None):
         
-        if not filename == None:
+        if  filename is not None:
             self.mov = np.array(pims.open(filename))
             self.mov = np.swapaxes(self.mov,1,2)
             self.mov=self.mov[:,:,::-1]
@@ -397,7 +399,43 @@ class XMovie(object):
          rho = np.divide(rho, neighbors)
 
          return rho
-    
+         
+    def partition_FOV_KMeans(self,tradeoff_weight=.5,fx=.25,fy=.25,n_clusters=4,max_iter=500):
+        """ 
+        Partition the FOV in clusters that are grouping pixels close in space and in mutual correlation
+                        
+        Parameters
+        ------------------------------
+        tradeoff_weight:between 0 and 1 will weight the contributions of distance and correlation in the overall metric
+        fx,fy: downsampling factor to apply to the movie 
+        n_clusters,max_iter: KMeans algorithm parameters
+        
+        Outputs
+        -------------------------------
+        fovs:array 2D encoding the partitions of the FOV
+        mcoef: matric of pairwise correlation coefficients
+        distanceMatrix: matrix of picel distances
+        
+        Example
+        
+        """
+        m1=self.copy()
+        m1.resize(fx,fy)
+        T,h,w=m1.mov.shape
+        Y=np.reshape(m1.mov,(T,h*w))
+        mcoef=np.corrcoef(Y.T)
+        idxA,idxB =  np.meshgrid(range(w),range(h));
+        coordmat=np.vstack((idxA.flatten(),idxB.flatten()))
+        distanceMatrix=euclidean_distances(coordmat.T);
+        distanceMatrix=distanceMatrix/np.max(distanceMatrix)
+        estim=KMeans(n_clusters=n_clusters,max_iter=max_iter);
+        kk=estim.fit(tradeoff_weight*mcoef-(1-tradeoff_weight)*distanceMatrix)
+        labs=kk.labels_
+        fovs=np.reshape(labs,(h,w))
+        fovs=cv2.resize(np.uint8(fovs),self.mov.shape[1:],1/fx,1/fy,interpolation=cv2.INTER_NEAREST)
+        return np.uint8(fovs), mcoef, distanceMatrix
+       
+        
     def playMovie(self,gain=1.0,frate=None,magnification=2,offset=0):
          """
          Play the movie using opencv
