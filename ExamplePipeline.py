@@ -50,12 +50,16 @@ m=XMovie(filename, frameRate=frameRate);
 plt.imshow(m.mov[100],cmap=plt.cm.Greys_r)
 
 #%% example play movie
-m.playMovie(frate=.06,gain=6.0,magnification=3)
+m.playMovie(frate=.03,gain=10.0,magnification=3)
 
 #%% example take first channel of two
 channelId=1;
 totalChannels=2;
 m.makeSubMov(range(channelId-1,m.mov.shape[0],totalChannels))
+
+#%%  prtition into two movies up and down
+
+m.crop(crop_top=32,crop_bottom=0,crop_left=0,crop_right=0,crop_begin=0,crop_end=0)
 
 
 #%% concatenate movies (it will add to the original movie)
@@ -116,7 +120,7 @@ if resizeMovie:
     fz=.2; # downsample  a factor of 5 across time dimension
     m.resize(fx=fx,fy=fy,fz=fx)
 else:
-    fx,fy,fz=1,1,.5
+    fx,fy,fz=1,1,.3
 
 #%% compute delta f over f (DF/F)
 initTime=time.time()
@@ -124,13 +128,13 @@ m.computeDFF(secsWindow=5,quantilMin=40,subtract_minimum=True)
 print 'elapsed time:' + str(time.time()-initTime) 
 
 #%% compute subregions where to apply more efficiently facrtorization algorithms
-fovs, mcoef, distanceMatrix=m.partition_FOV_KMeans(tradeoff_weight=.7,fx=.25,fy=.25,n_clusters=4,max_iter=500);
+fovs, mcoef, distanceMatrix=m.partition_FOV_KMeans(tradeoff_weight=.7,fx=.25,fy=.25,n_clusters=2,max_iter=500);
 plt.imshow(fovs)
 
 #%% create a denoised version of the movie, nice to visualize
 if True:
     m2=m.copy()
-    m2.IPCA_denoise(components = 10, batch = 1000)
+    m2.IPCA_denoise(components = 100, batch = 1000)
     m2.playMovie(frate=.05,magnification=1,gain=2.0)
     
 #%%
@@ -143,17 +147,17 @@ matrixMontage(np.asarray(space_spcomps),cmap=plt.cm.gray) # visualize components
 
 #%% compute spatial components via ICA PCA
 initTime=time.time()
-spcomps=m.IPCA_stICA(components=30,mu=1);
+spcomps=m.IPCA_stICA(components=50,mu=.5);
 print 'elapsed time:' + str(time.time()-initTime) 
 matrixMontage(spcomps,cmap=plt.cm.gray) # visualize components
  
 #%% extract ROIs from spatial components 
 #_masks,masks_grouped=m.extractROIsFromPCAICA(spcomps, numSTD=6, gaussiansigmax=2 , gaussiansigmay=2)
-_masks,_=m.extractROIsFromPCAICA(spcomps, numSTD=10.0, gaussiansigmax=1 , gaussiansigmay=2)
+_masks,_=m.extractROIsFromPCAICA(spcomps, numSTD=10.0, gaussiansigmax=0 , gaussiansigmay=0)
 matrixMontage(np.asarray(_masks),cmap=plt.cm.gray)
 
 #%%  extract single ROIs from each mask
-minPixels=30;
+minPixels=5;
 maxPixels=2500;
 masks_tmp=[];
 for mask in _masks:
@@ -184,6 +188,9 @@ F0=np.percentile(m.mov,minPercentileRemove)
 m.mov=m.mov-F0; 
 traces, tracesDFF = m.extract_traces_from_masks(all_masks,type='DFF',window_sec=15,minQuantile=8)
 plt.plot(tracesDFF)
+#%%
+plt.imshow(tracesDFF.T)
+
 
 #%% save the results of the analysis in python format
 np.savez(filename_analysis,all_masks=all_masks,spcomps=spcomps,fx=fx,fy=fy,fz=fz,traces=traces,tracesDFF=tracesDFF)

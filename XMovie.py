@@ -483,10 +483,13 @@ class XMovie(object):
                 break  
          cv2.destroyAllWindows()       
         
-    def crop(self,crop_left,crop_right,crop_top,crop_bottom,crop_begin=0,crop_end=1):
+    def crop(self,crop_top=0,crop_bottom=0,crop_left=0,crop_right=0,crop_begin=0,crop_end=0):
         """ Crop movie        
         """
-        self.mov=self.mov[crop_begin:-crop_end,crop_left:-crop_right,crop_top:-crop_bottom]
+        
+        t,h,w=self.mov.shape
+        
+        self.mov=self.mov[crop_begin:t-crop_end,crop_top:h-crop_bottom,crop_left:w-crop_right]
         
         
     def computeDFF(self,secsWindow=5,quantilMin=8,subtract_minimum=False,squared_F=True):
