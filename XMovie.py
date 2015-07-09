@@ -321,7 +321,7 @@ class XMovie(object):
         """ Create copy of the object"""
         return copy.copy(self)    
     
-    def IPCA_stICA(self, components = 50, batch = 1000, mu = 0.05, ICAfun = 'logcosh'):
+    def IPCA_stICA(self, components = 50, batch = 1000, mu = 1, ICAfun = 'logcosh'):
         # Parameters:
         #   components (default 50)
         #     = number of independent components to return
@@ -375,26 +375,53 @@ class XMovie(object):
         print "to do"
         
    
-    def local_correlations(self):
+    def local_correlations(self,eight_neighbours=False):
          # Output:
          #   rho M x N matrix, cross-correlation with adjacent pixel
+         # if eight_neighbours=True it will take the diagonal neighbours too
 
          rho = np.zeros(np.shape(self.mov)[1:3])
          w_mov = (self.mov - np.mean(self.mov, axis = 0))/np.std(self.mov, axis = 0)
  
          rho_h = np.mean(np.multiply(w_mov[:,:-1,:], w_mov[:,1:,:]), axis = 0)
          rho_w = np.mean(np.multiply(w_mov[:,:,:-1], w_mov[:,:,1:,]), axis = 0)
+         
+         if True:
+             rho_d1 = np.mean(np.multiply(w_mov[:,1:,:-1], w_mov[:,:-1,1:,]), axis = 0)
+             rho_d2 = np.mean(np.multiply(w_mov[:,:-1,:-1], w_mov[:,1:,1:,]), axis = 0)
+
 
          rho[:-1,:] = rho[:-1,:] + rho_h
          rho[1:,:] = rho[1:,:] + rho_h
          rho[:,:-1] = rho[:,:-1] + rho_w
          rho[:,1:] = rho[:,1:] + rho_w
-
-         neighbors = 4 * np.ones(np.shape(self.mov)[1:3])        
-         neighbors[0,:] = neighbors[0,:] - 1;
-         neighbors[-1,:] = neighbors[-1,:] - 1;
-         neighbors[:,0] = neighbors[:,0] - 1;
-         neighbors[:,-1] = neighbors[:,-1] - 1;
+         
+         if eight_neighbours:
+             rho[:-1,:-1] = rho[:-1,:-1] + rho_d2
+             rho[1:,1:] = rho[1:,1:] + rho_d1
+             rho[1:,:-1] = rho[1:,:-1] + rho_d1
+             rho[:-1,1:] = rho[:-1,1:] + rho_d2
+         
+         
+         if eight_neighbours:
+             neighbors = 8 * np.ones(np.shape(self.mov)[1:3])  
+             neighbors[0,:] = neighbors[0,:] - 3;
+             neighbors[-1,:] = neighbors[-1,:] - 3;
+             neighbors[:,0] = neighbors[:,0] - 3;
+             neighbors[:,-1] = neighbors[:,-1] - 3;
+             neighbors[0,0] = neighbors[0,0] + 1;
+             neighbors[-1,-1] = neighbors[-1,-1] + 1;
+             neighbors[-1,0] = neighbors[-1,0] + 1;
+             neighbors[0,-1] = neighbors[0,-1] + 1;
+         else:
+             neighbors = 4 * np.ones(np.shape(self.mov)[1:3]) 
+             neighbors[0,:] = neighbors[0,:] - 1;
+             neighbors[-1,:] = neighbors[-1,:] - 1;
+             neighbors[:,0] = neighbors[:,0] - 1;
+             neighbors[:,-1] = neighbors[:,-1] - 1;
+         
+         
+         
 
          rho = np.divide(rho, neighbors)
 
@@ -432,7 +459,7 @@ class XMovie(object):
         kk=estim.fit(tradeoff_weight*mcoef-(1-tradeoff_weight)*distanceMatrix)
         labs=kk.labels_
         fovs=np.reshape(labs,(h,w))
-        fovs=cv2.resize(np.uint8(fovs),self.mov.shape[1:],1/fx,1/fy,interpolation=cv2.INTER_NEAREST)
+        fovs=cv2.resize(np.uint8(fovs),(w,h),1/fx,1/fy,interpolation=cv2.INTER_NEAREST)
         return np.uint8(fovs), mcoef, distanceMatrix
        
         

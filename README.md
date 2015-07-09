@@ -59,6 +59,7 @@ conda install pip
 pip install pims
 conda install scikit­-learn #(or pip install scikit-learn)
 conda install opencv #(this will not work on windows)
+conda install CVXOPT
 
 ```
 For opencv windows installation check [here]( 

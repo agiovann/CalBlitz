@@ -31,12 +31,12 @@ except:
 
 #filename='20150522_1_1_001.tif'
        
-#filename='M_FLUO.tif'
-#frameRate=.064;
+filename='M_FLUO.tif'
+frameRate=.064;
 
 #data_type='fly'
-filename='20150522_1_1_001.tif'
-frameRate=.128;
+#filename='20150522_1_1_001.tif'
+#frameRate=.128;
 
 #%%
 filename_mc=filename[:-4]+'_mc.npz'
@@ -97,6 +97,8 @@ np.savez(filename_mc,mov=m.mov,frameRate=frameRate,templates=templates,shifts=sh
 
 #%% RELOAD MOTION CORRECTED MOVIE
 m=XMovie(mat=np.load(filename_mc)['mov'], frameRate=frameRate);    
+max_shift=np.load(filename_mc)['max_shift']
+
 
 #%% crop movie after motion correction. 
 m.crop(max_shift,max_shift,max_shift,max_shift)    
@@ -107,14 +109,14 @@ if False:
 
 
 #%% resize to increase SNR and have better convergence of segmentation algorithms
-resizeMovie=True
+resizeMovie=False
 if resizeMovie:
     fx=.5; # downsample a factor of four along x axis
     fy=.5;
     fz=.2; # downsample  a factor of 5 across time dimension
     m.resize(fx=fx,fy=fy,fz=fx)
 else:
-    fx,fy,fz=1,1,1
+    fx,fy,fz=1,1,.5
 
 #%% compute delta f over f (DF/F)
 initTime=time.time()
@@ -122,7 +124,8 @@ m.computeDFF(secsWindow=5,quantilMin=40,subtract_minimum=True)
 print 'elapsed time:' + str(time.time()-initTime) 
 
 #%% compute subregions where to apply more efficiently facrtorization algorithms
-fovs, mcoef, distanceMatrix=m.partition_FOV_KMeans(tradeoff_weight=.5,fx=.25,fy=.25,n_clusters=4,max_iter=500);
+fovs, mcoef, distanceMatrix=m.partition_FOV_KMeans(tradeoff_weight=.7,fx=.25,fy=.25,n_clusters=4,max_iter=500);
+plt.imshow(fovs)
 
 #%% create a denoised version of the movie, nice to visualize
 if True:
@@ -134,19 +137,19 @@ if True:
 
 #%% compute spatial components via NMF
 initTime=time.time()
-space_spcomps,time_comps=m.NonnegativeMatrixFactorization(n_components=10,beta=1,tol=5e-7);
+space_spcomps,time_comps=m.NonnegativeMatrixFactorization(n_components=20,beta=1,tol=5e-7);
 print 'elapsed time:' + str(time.time()-initTime) 
 matrixMontage(np.asarray(space_spcomps),cmap=plt.cm.gray) # visualize components
 
 #%% compute spatial components via ICA PCA
 initTime=time.time()
-spcomps=m.IPCA_stICA(components=10,mu=.5);
+spcomps=m.IPCA_stICA(components=30,mu=1);
 print 'elapsed time:' + str(time.time()-initTime) 
 matrixMontage(spcomps,cmap=plt.cm.gray) # visualize components
  
 #%% extract ROIs from spatial components 
-_masks,masks_grouped=m.extractROIsFromPCAICA(spcomps, numSTD=6, gaussiansigmax=2 , gaussiansigmay=2)
-#masks=m.extractROIsFromPCAICA(spcomps, numSTD=10, gaussiansigmax=1 , gaussiansigmay=2)
+#_masks,masks_grouped=m.extractROIsFromPCAICA(spcomps, numSTD=6, gaussiansigmax=2 , gaussiansigmay=2)
+_masks,_=m.extractROIsFromPCAICA(spcomps, numSTD=10.0, gaussiansigmax=1 , gaussiansigmay=2)
 matrixMontage(np.asarray(_masks),cmap=plt.cm.gray)
 
 #%%  extract single ROIs from each mask
