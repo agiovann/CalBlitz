@@ -8,7 +8,7 @@ This projects implements a set of essential methods required in the calcium imag
 
 ## Code Example
 
-```
+```python
 #%%
 from XMovie import XMovie
 from pylab import plt
