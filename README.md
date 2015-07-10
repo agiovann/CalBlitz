@@ -2,7 +2,9 @@
 **Blazing fast** calcium imaging analysis toolbox
 
 ## Synopsis
-This projects implements a set of essential methods required in the calcium imaging movies analysis pipeline. **Fast and scalable algorithms** are implemented for motion correction, movie manipulation and roi segmentation. It is assumed that movies are collected with the scanimage data acquisition software and stored in *.tif* format
+This projects implements a set of essential methods required in the calcium imaging movies analysis pipeline. **Fast and scalable algorithms** are implemented for motion correction, movie manipulation and roi segmentation. It is assumed that movies are collected with the scanimage data acquisition software and stored in *.tif* format. Find below a schematic of the calcium imaging pipeline:
+
+![Alt text](images/CaImagingPipeline.png?raw=true "calcium imaging pipeline")
 
 ## Code Example
 
