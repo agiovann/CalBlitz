@@ -4,7 +4,7 @@ Created on Tue Jun 30 20:56:07 2015
 @author: agiovann
 """
 #%% add CalBlitz folder to python directory
-path_to_CalBlitz_folder='/Users/agiovann/Documents/Software/CalBlitz'
+path_to_CalBlitz_folder='/home/ubuntu/SOFTWARE/CalBlitz'
 
 import sys
 sys.path
@@ -31,13 +31,15 @@ except:
 
 #filename='20150522_1_1_001.tif'
        
-filename='M_FLUO.tif'
-frameRate=.064;
+#filename='M_FLUO.tif'
+#frameRate=.064;
 
 #data_type='fly'
 #filename='20150522_1_1_001.tif'
 #frameRate=.128;
 
+filename='agchr2_030915_01_040215_a_freestyle_01_cam1.avi'
+frameRate=0.0083;
 #%%
 filename_mc=filename[:-4]+'_mc.npz'
 filename_analysis=filename[:-4]+'_analysis.npz'    
@@ -50,7 +52,7 @@ m=XMovie(filename, frameRate=frameRate);
 plt.imshow(m.mov[100],cmap=plt.cm.Greys_r)
 
 #%% example play movie
-m.playMovie(frate=.03,gain=10.0,magnification=3)
+m.playMovie(frate=.03,gain=1.0,magnification=.1)
 
 #%% example take first channel of two
 channelId=1;
@@ -59,7 +61,7 @@ m.makeSubMov(range(channelId-1,m.mov.shape[0],totalChannels))
 
 #%%  prtition into two movies up and down
 
-m.crop(crop_top=32,crop_bottom=0,crop_left=0,crop_right=0,crop_begin=0,crop_end=0)
+m.crop(crop_top=150,crop_bottom=150,crop_left=150,crop_right=150,crop_begin=0,crop_end=0)
 
 
 #%% concatenate movies (it will add to the original movie)
@@ -76,8 +78,8 @@ num_iter=3; # numer of times motion correction is executed
 template=None # here you can use your own template (best representation of the FOV)
 
 for j in range(0,num_iter):
-    template,shift=m.motion_correct(max_shift=max_shift,template=template,show_movie=False);
-    templates.append(template)
+    template_used,shift=m.motion_correct(max_shift=max_shift,template=None,show_movie=False);
+    templates.append(template_used)
     shift=np.asarray(shift)
     shifts.append(shift)
 
@@ -91,10 +93,10 @@ if False:
     totalShifts=np.sum(np.asarray(shifts),axis=0)[:,0:2].tolist()
     mov_other_channel.applyShifstToMovie(totalShifts)
 
-#%% plot final template    
+#%% plot movie median
 minBrightness=50;
 maxBrightness=300;
-plt.imshow(templates[-1],cmap=plt.cm.Greys_r,vmin=minBrightness,vmax=maxBrightness)
+plt.imshow(np.median(m.mov,axis=0),cmap=plt.cm.Greys_r,vmin=minBrightness,vmax=maxBrightness)
 
 #%% save motion corrected movie inpython format along with the results. This takes some time now but will save  a lot later...
 np.savez(filename_mc,mov=m.mov,frameRate=frameRate,templates=templates,shifts=shifts,max_shift=max_shift)
@@ -113,14 +115,14 @@ if False:
 
 
 #%% resize to increase SNR and have better convergence of segmentation algorithms
-resizeMovie=False
+resizeMovie=True
 if resizeMovie:
     fx=.5; # downsample a factor of four along x axis
     fy=.5;
-    fz=.2; # downsample  a factor of 5 across time dimension
+    fz=.1; # downsample  a factor of 5 across time dimension
     m.resize(fx=fx,fy=fy,fz=fx)
 else:
-    fx,fy,fz=1,1,.3
+    fx,fy,fz=1,1,1
 
 #%% compute delta f over f (DF/F)
 initTime=time.time()
@@ -128,7 +130,7 @@ m.computeDFF(secsWindow=5,quantilMin=40,subtract_minimum=True)
 print 'elapsed time:' + str(time.time()-initTime) 
 
 #%% compute subregions where to apply more efficiently facrtorization algorithms
-fovs, mcoef, distanceMatrix=m.partition_FOV_KMeans(tradeoff_weight=.7,fx=.25,fy=.25,n_clusters=2,max_iter=500);
+fovs, mcoef, distanceMatrix=m.partition_FOV_KMeans(tradeoff_weight=.7,fx=.25,fy=.25,n_clusters=4,max_iter=500);
 plt.imshow(fovs)
 
 #%% create a denoised version of the movie, nice to visualize

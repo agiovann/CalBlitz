@@ -23,6 +23,8 @@ from scipy.ndimage import label
 
 import sys
 import functools
+import os.path
+
 #%%
 
     
@@ -46,10 +48,45 @@ class XMovie(object):
     def __init__(self, filename=None, mat=None, frameRate=None):
         
         if  filename is not None:
-            self.mov = np.array(pims.open(filename))
-            self.mov = np.swapaxes(self.mov,1,2)
-            self.mov=self.mov[:,:,::-1]
+
+            extension = os.path.splitext(filename)[1]
+
+            if extension == '.tif': # load avi file
+
+                self.mov = np.array(pims.open(filename))            
+                self.mov = np.swapaxes(self.mov,1,2)            
+                self.mov=self.mov[:,:,::-1]
+
+            elif extension == '.avi': # load avi file
+
+                cap = cv2.VideoCapture(filename)
+                length = int(cap.get(cv2.cv.CV_CAP_PROP_FRAME_COUNT))
+                width  = int(cap.get(cv2.cv.CV_CAP_PROP_FRAME_WIDTH))
+                height = int(cap.get(cv2.cv.CV_CAP_PROP_FRAME_HEIGHT))
+                
+                self.mov=np.zeros((length, height,width),dtype=np.uint8)
+                counter=0
+                ret=True
+                while True:
+                    # Capture frame-by-frame
+                    ret, frame = cap.read()
+                    if not ret:
+                        break
+                    self.mov[counter]=frame[:,:,0]
+                    counter=counter+1
+                    if not counter%100:
+                        print counter
+                
+                # When everything done, release the capture
+                cap.release()
+                cv2.destroyAllWindows()            
+
+            else:
+
+                raise Exception('Unknown file type')
+                
             self.filename = filename
+            
         elif np.any(mat):
              self.mov=mat
         else: 
