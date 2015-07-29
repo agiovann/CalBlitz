@@ -21,7 +21,6 @@ plt.ion()
 from scipy.ndimage.filters import gaussian_filter
 from scipy.ndimage import label
 
-from libtiff import TIFF, TiffFile
 import sys
 import functools
 #%%
