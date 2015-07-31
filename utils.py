@@ -29,52 +29,60 @@ def matrixMontage(spcomps,*args, **kwargs):
         plt.imshow(comp,*args, **kwargs)                             
         plt.axis('off')         
         
-#%%
-#def computeDFF(mov,frameRate,maxshift,secsWindow=5,quantilMin=.8,):
-#    """ 
-#    compute the DFF of the movie
-#    
-#    """
-#    assert(np.min(mov)>0),"All pixels must be nonnegative"
-#       
-#        
-#    numFrames,linePerFrame,pixPerLine=np.shape(mov)
-#    downsampfact=int(secsWindow/frameRate);
-#    elm_missing=int(np.ceil(numFrames*1.0/downsampfact)*downsampfact-numFrames)
-#    padbefore=np.floor(elm_missing/2.0)
-#    padafter=np.ceil(elm_missing/2.0)
-#    print 'Inizial Size Image:' + np.str(np.shape(mov))
-#    mov=np.pad(mov,((padbefore,padafter),(0,0),(0,0)),mode='reflect')
-#    numFramesNew,linePerFrame,pixPerLine=np.shape(mov)
-#    maxshift=5;
-#    #% compute baseline quickly
-#    movBL=np.reshape(mov,(downsampfact,int(numFramesNew/downsampfact),linePerFrame,pixPerLine));
-#    movBL=np.percentile(movBL,quantilMin,axis=0);
-#    movBL=scipy.ndimage.zoom(np.array(movBL,dtype=np.float32),[downsampfact ,1, 1])
-#    #%
-#    movDFF=(mov-movBL)/np.sqrt(movBL)
-#    movDFF=movDFF[padbefore:-padafter,maxshift:-maxshift,; 
-#    print 'Final Size Movie:' +  np.str(movDFF.shape)
-#    return movDFF
+#%% CVX OPT
+#####    LOOK AT THIS! https://github.com/cvxgrp/cvxpy/blob/master/examples/qcqp.py
+if False:
+    from cvxopt import matrix, solvers
+    A = matrix([ [ .3, -.4,  -.2,  -.4,  1.3 ],
+                     [ .6, 1.2, -1.7,   .3,  -.3 ],
+                     [-.3,  .0,   .6, -1.2, -2.0 ] ])
+    b = matrix([ 1.5, .0, -1.2, -.7, .0])
+    m, n = A.size
+    I = matrix(0.0, (n,n))
+    I[::n+1] = 1.0
+    G = matrix([-I, matrix(0.0, (1,n)), I])
+    h = matrix(n*[0.0] + [1.0] + n*[0.0])
+    dims = {'l': n, 'q': [n+1], 's': []}
+    x = solvers.coneqp(A.T*A, -A.T*b, G, h, dims)['x']
+    print(x)    
+    #%%
+    from scipy.signal import lfilter
+    dt=0.016;
+    t=np.arange(0,10,dt)
+    lambda_=dt*1;
+    tau=.17;
+    sigmaNoise=.1;
+    tfilt=np.arange(0,4,dt);
+    spikes=np.random.poisson(lam=lambda_,size=t.shape);
+    print(np.sum(spikes))
+    filtExp=np.exp(-tfilt/tau);
+    simTraceCa=lfilter(filtExp,1,spikes);
+    simTraceFluo=simTraceCa+np.random.normal(loc=0, scale=sigmaNoise,size=np.shape(simTraceCa));
+    plt.plot(t,simTraceCa,'g')
+    plt.plot(t,spikes,'r')
+    plt.plot(t,simTraceFluo)           
+    
+      
+    #%%
+    #trtest=tracesDFF.D_5
+    #simTraceFluo=trtest.Data';
+    #dt=trtest.frameRate;
+    #t=trtest.Time;
+    #tau=.21;
+    
+    #%%
+    gam=(1-dt/tau);
+    numSamples=np.shape(simTraceFluo)[-1];
+    G=np.diag(np.repeat(-gam,numSamples-1),-1) + np.diag(np.repeat(1,numSamples));
+    A_2=- np.diag(np.repeat(1,numSamples));
+    Aeq1=np.concatenate((G,A_2),axis=1);
+    beq=np.hstack((simTraceFluo[0],np.zeros(numSamples-1)));
+    A1=np.hstack((np.zeros(numSamples), -np.ones(numSamples)));
+    
+    
+    #%%
+    T = np.size(G,0);
+    oness=np.ones((T));
+    sqthr=np.sqrt(thr);
+    #y(y<(mean(y(:)-3*std(y(:)))))=0;
 
-#%%
-#filename='temp_mc_subpix_linear.tif'
-#movMat=np.array(pims.open(filename))
-#movMat=np.swapaxes(movMat,1,2)
-#movMat=movMat[:,:,::-1]
-#movDFF=computeDFF(movMat,frameRate,5)
-##%%
-#playMovie(movDFF,frate=frameRate)
-##%%
-#
-#m=XMovie(filename,frameRate)
-#m=m.motioncorrect;
-#
-#
-#
-#m=m.saveTiff()
-#m=m.saveMat()
-#
-#
-#
-#    
