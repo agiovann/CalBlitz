@@ -4,7 +4,7 @@ Created on Tue Jun 30 20:56:07 2015
 @author: agiovann
 """
 #%% add CalBlitz folder to python directory
-path_to_CalBlitz_folder='/home/ubuntu/SOFTWARE/CalBlitz'
+path_to_CalBlitz_folder='/Users/agiovann/Documents/SOFTWARE/CalBlitz'
 
 import sys
 sys.path
@@ -38,8 +38,13 @@ except:
 #filename='20150522_1_1_001.tif'
 #frameRate=.128;
 
-filename='agchr2_030915_01_040215_a_freestyle_01_cam1.avi'
+filename='agchr2_030915_01_040315_a_freestyleshake_01_cam1.avi'
 frameRate=0.0083;
+
+#filename='img007.tif'
+#frameRate=0.033;
+
+
 #%%
 filename_mc=filename[:-4]+'_mc.npz'
 filename_analysis=filename[:-4]+'_analysis.npz'    
@@ -52,7 +57,7 @@ m=XMovie(filename, frameRate=frameRate);
 plt.imshow(m.mov[100],cmap=plt.cm.Greys_r)
 
 #%% example play movie
-m.playMovie(frate=.03,gain=1.0,magnification=.1)
+m.playMovie(frate=.03,gain=20.0,magnification=4)
 
 #%% example take first channel of two
 channelId=1;
@@ -74,7 +79,7 @@ templates=[];
 shifts=[];
 
 max_shift=5;
-num_iter=3; # numer of times motion correction is executed
+num_iter=10; # numer of times motion correction is executed
 template=None # here you can use your own template (best representation of the FOV)
 
 for j in range(0,num_iter):
@@ -92,11 +97,19 @@ if False:
     # here reload the original imaging channel from movie
     totalShifts=np.sum(np.asarray(shifts),axis=0)[:,0:2].tolist()
     mov_other_channel.applyShifstToMovie(totalShifts)
-
+    
+#%% if you want to apply the shifts only ones to reduce the smoothing
+if False:
+    totalShifts=np.sum(np.asarray(shifts),axis=0)[:,0:2].tolist()
+    m=XMovie(filename, frameRate=frameRate);
+    m.applyShifstToMovie(totalShifts)
+    
+    
 #%% plot movie median
-minBrightness=50;
-maxBrightness=300;
-plt.imshow(np.median(m.mov,axis=0),cmap=plt.cm.Greys_r,vmin=minBrightness,vmax=maxBrightness)
+minBrightness=0;
+maxBrightness=20;
+medMov=np.median(m.mov,axis=0)
+plt.imshow(medMov,cmap=plt.cm.Greys_r,vmin=minBrightness,vmax=maxBrightness)
 
 #%% save motion corrected movie inpython format along with the results. This takes some time now but will save  a lot later...
 np.savez(filename_mc,mov=m.mov,frameRate=frameRate,templates=templates,shifts=shifts,max_shift=max_shift)
@@ -126,7 +139,7 @@ else:
 
 #%% compute delta f over f (DF/F)
 initTime=time.time()
-m.computeDFF(secsWindow=5,quantilMin=40,subtract_minimum=True)
+m.computeDFF(secsWindow=15,quantilMin=20,subtract_minimum=False)
 print 'elapsed time:' + str(time.time()-initTime) 
 
 #%% compute subregions where to apply more efficiently facrtorization algorithms
@@ -137,9 +150,10 @@ plt.imshow(fovs)
 if True:
     m2=m.copy()
     m2.IPCA_denoise(components = 100, batch = 1000)
-    m2.playMovie(frate=.05,magnification=1,gain=2.0)
+    m2.playMovie(frate=.05,magnification=4,gain=10.0)
     
 #%%
+    
 
 #%% compute spatial components via NMF
 initTime=time.time()
@@ -149,13 +163,13 @@ matrixMontage(np.asarray(space_spcomps),cmap=plt.cm.gray) # visualize components
 
 #%% compute spatial components via ICA PCA
 initTime=time.time()
-spcomps=m.IPCA_stICA(components=50,mu=.5);
+spcomps=m.IPCA_stICA(components=10,mu=.5);
 print 'elapsed time:' + str(time.time()-initTime) 
 matrixMontage(spcomps,cmap=plt.cm.gray) # visualize components
  
 #%% extract ROIs from spatial components 
 #_masks,masks_grouped=m.extractROIsFromPCAICA(spcomps, numSTD=6, gaussiansigmax=2 , gaussiansigmay=2)
-_masks,_=m.extractROIsFromPCAICA(spcomps, numSTD=10.0, gaussiansigmax=0 , gaussiansigmay=0)
+_masks,_=m.extractROIsFromPCAICA(spcomps, numSTD=10.0, gaussiansigmax=1 , gaussiansigmay=1)
 matrixMontage(np.asarray(_masks),cmap=plt.cm.gray)
 
 #%%  extract single ROIs from each mask
@@ -188,8 +202,9 @@ minPercentileRemove=1;
 # remove an estimation of what a Dark patch is, you should provide a better estimate
 F0=np.percentile(m.mov,minPercentileRemove)
 m.mov=m.mov-F0; 
-traces, tracesDFF = m.extract_traces_from_masks(all_masks,type='DFF',window_sec=15,minQuantile=8)
 plt.plot(tracesDFF)
+
+
 #%%
 plt.imshow(tracesDFF.T)
 
