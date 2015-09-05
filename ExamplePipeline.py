@@ -17,7 +17,7 @@ import numpy as np
 from utils import matrixMontage
 #% set basic ipython functionalities
 try: 
-    plt.ion()
+    pl.ion()
     %load_ext autoreload
     %autoreload 2
 except:
@@ -44,6 +44,8 @@ frameRate=0.0083;
 #filename='img007.tif'
 #frameRate=0.033;
 
+filename='k26_v1_176um_target_pursuit_002_013.tif'
+frameRate=0.033
 
 #%%
 filename_mc=filename[:-4]+'_mc.npz'
@@ -54,10 +56,10 @@ filename_traces=filename[:-4]+'_traces.npz'
 m=XMovie(filename, frameRate=frameRate);
 
 #%% example plot a frame
-plt.imshow(m.mov[100],cmap=plt.cm.Greys_r)
+pl.imshow(m.mov[100],cmap=pl.cm.Greys_r)
 
 #%% example play movie
-m.playMovie(frate=.03,gain=20.0,magnification=4)
+m.playMovie(frate=.03,gain=100.0,magnification=.5,offset=100)
 
 #%% example take first channel of two
 channelId=1;
@@ -78,8 +80,8 @@ m.append(new_mov)
 templates=[];
 shifts=[];
 
-max_shift=5;
-num_iter=10; # numer of times motion correction is executed
+max_shift=10;
+num_iter=3; # numer of times motion correction is executed
 template=None # here you can use your own template (best representation of the FOV)
 
 for j in range(0,num_iter):
@@ -88,7 +90,7 @@ for j in range(0,num_iter):
     shift=np.asarray(shift)
     shifts.append(shift)
 
-plt.plot(np.asarray(shifts).reshape((j+1)*shift.shape[0],shift.shape[1]))
+pl.plot(np.asarray(shifts).reshape((j+1)*shift.shape[0],shift.shape[1]))
 
 
 
@@ -106,10 +108,10 @@ if False:
     
     
 #%% plot movie median
-minBrightness=0;
-maxBrightness=20;
+minBrightness=None;
+maxBrightness=None;
 medMov=np.median(m.mov,axis=0)
-plt.imshow(medMov,cmap=plt.cm.Greys_r,vmin=minBrightness,vmax=maxBrightness)
+pl.imshow(medMov,cmap=pl.cm.Greys_r,vmin=minBrightness,vmax=maxBrightness)
 
 #%% save motion corrected movie inpython format along with the results. This takes some time now but will save  a lot later...
 np.savez(filename_mc,mov=m.mov,frameRate=frameRate,templates=templates,shifts=shifts,max_shift=max_shift)
@@ -130,9 +132,9 @@ if False:
 #%% resize to increase SNR and have better convergence of segmentation algorithms
 resizeMovie=True
 if resizeMovie:
-    fx=.5; # downsample a factor of four along x axis
-    fy=.5;
-    fz=.1; # downsample  a factor of 5 across time dimension
+    fx=.4; # downsample a factor of four along x axis
+    fy=.4;
+    fz=.2; # downsample  a factor of 5 across time dimension
     m.resize(fx=fx,fy=fy,fz=fx)
 else:
     fx,fy,fz=1,1,1
@@ -144,13 +146,13 @@ print 'elapsed time:' + str(time.time()-initTime)
 
 #%% compute subregions where to apply more efficiently facrtorization algorithms
 fovs, mcoef, distanceMatrix=m.partition_FOV_KMeans(tradeoff_weight=.7,fx=.25,fy=.25,n_clusters=4,max_iter=500);
-plt.imshow(fovs)
+pl.imshow(fovs)
 
 #%% create a denoised version of the movie, nice to visualize
 if True:
     m2=m.copy()
-    m2.IPCA_denoise(components = 100, batch = 1000)
-    m2.playMovie(frate=.05,magnification=4,gain=10.0)
+    m2.IPCA_denoise(components = 100, batch = 5000)
+    m2.playMovie(frate=.05,magnification=10,gain=1.0)
     
 #%%
     
@@ -159,18 +161,18 @@ if True:
 initTime=time.time()
 space_spcomps,time_comps=m.NonnegativeMatrixFactorization(n_components=20,beta=1,tol=5e-7);
 print 'elapsed time:' + str(time.time()-initTime) 
-matrixMontage(np.asarray(space_spcomps),cmap=plt.cm.gray) # visualize components
+matrixMontage(np.asarray(space_spcomps),cmap=pl.cm.gray) # visualize components
 
 #%% compute spatial components via ICA PCA
 initTime=time.time()
-spcomps=m.IPCA_stICA(components=10,mu=.5);
+spcomps=m.IPCA_stICA(components=20,mu=.5,batch = 5000);
 print 'elapsed time:' + str(time.time()-initTime) 
-matrixMontage(spcomps,cmap=plt.cm.gray) # visualize components
+matrixMontage(spcomps,cmap=pl.cm.gray) # visualize components
  
 #%% extract ROIs from spatial components 
 #_masks,masks_grouped=m.extractROIsFromPCAICA(spcomps, numSTD=6, gaussiansigmax=2 , gaussiansigmay=2)
 _masks,_=m.extractROIsFromPCAICA(spcomps, numSTD=10.0, gaussiansigmax=1 , gaussiansigmay=1)
-matrixMontage(np.asarray(_masks),cmap=plt.cm.gray)
+matrixMontage(np.asarray(_masks),cmap=pl.cm.gray)
 
 #%%  extract single ROIs from each mask
 minPixels=5;
@@ -191,8 +193,8 @@ if fx != 1 or fy !=1:
 else:
     all_masks=masks_tmp              
 
-all_masksForPlot=[kk*(ii+1)*1.0 for ii,kk in enumerate(all_masks)]
-plt.imshow(np.max(np.asarray(all_masksForPlot,dtype=np.float16),axis=0))
+    all_masksForPlot=[np.round(kk)*(ii+1)*1.0 for ii,kk in enumerate(all_masks)]
+pl.imshow(np.max(np.asarray(all_masksForPlot,dtype=np.float16),axis=0))
 
 
 #%% extract DF/F from orginal movie, needs to reload the motion corrected movie
@@ -202,11 +204,11 @@ minPercentileRemove=1;
 # remove an estimation of what a Dark patch is, you should provide a better estimate
 F0=np.percentile(m.mov,minPercentileRemove)
 m.mov=m.mov-F0; 
-plt.plot(tracesDFF)
+pl.plot(tracesDFF)
 
 
 #%%
-plt.imshow(tracesDFF.T)
+pl.imshow(tracesDFF.T)
 
 
 #%% save the results of the analysis in python format
