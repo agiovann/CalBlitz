@@ -32,8 +32,8 @@ except:
 
 #filename='20150522_1_1_001.tif'
        
-filename='M_FLUO.tif'
-frameRate=.064;
+filename='ac_001_001.tif'
+frameRate=.033;
 
 #data_type='fly'
 #filename='20150522_1_1_001.tif'
@@ -77,7 +77,7 @@ dset = f.create_dataset("mov",data=m.mov)
 dset = f.create_dataset("frameRate",data=frameRate)
 a=np.asarray(f['mov']) # or directly use f['mov']
 #%%
-m=XMovie(mat=np.load(filename_py)['mov'], frameRate=np.load(filename_py)['frameRate']); 
+m=XMovie(np.load(filename_py)['mov'], frameRate=np.load(filename_py)['frameRate']); 
 m.crop(crop_top=0,crop_bottom=1,crop_left=0,crop_right=0,crop_begin=0,crop_end=0)
 
 #%%  prtition into two movies up and down
@@ -96,8 +96,8 @@ m.append(new_mov)
 templates=[];
 shifts=[];
 
-max_shift_w=5;
-max_shift_h=5;
+max_shift_w=10;
+max_shift_h=10;
 num_iter=3; # numer of times motion correction is executed
 template=None # here you can use your own template (best representation of the FOV)
 

@@ -45,10 +45,11 @@ class XMovie(object):
     frameRate : float, inter frame interval in seconds
     """
     
-    def __init__(self, filename=None, mat=None, frameRate=None):
-        
-        if  filename is not None:
+    def __init__(self, mov , frameRate=None):
 
+        
+        if  type(mov) is str:
+            filename=mov
             extension = os.path.splitext(filename)[1]
 
             if extension == '.tif': # load avi file
@@ -80,19 +81,19 @@ class XMovie(object):
                 # When everything done, release the capture
                 cap.release()
                 cv2.destroyAllWindows()            
-
+            elif extension == '.npy': # load avi file                             
+                self.mov=np.load(filename)
             else:
-
-                raise Exception('Unknown file type')
+                raise Exception('Unknown file type_')
                 
             self.filename = filename
             
-        elif np.any(mat):
-             self.mov=mat
+        elif mov.ndim == 3:
+             self.mov=mov
         else: 
             raise Exception('You need to specify either matrix or filename')
         
-        if not frameRate==None:
+        if not frameRate is None:
             self.frameRate = frameRate
         else:
             raise Exception('You need to specify the frame rate')
@@ -177,17 +178,17 @@ class XMovie(object):
                  print "Frame %i"%(i+1); 
              sh_x_n, sh_y_n = shifts[i]
              M = np.float32([[1,0,sh_y_n],[0,1,sh_x_n]])                 
-             self.mov[i] = cv2.warpAffine(frame,M,(h,w),flags=cv2.INTER_CUBIC)
+             self.mov[i] = cv2.warpAffine(frame,M,(w,h),flags=cv2.INTER_CUBIC)
      
 
-    def extract_traces_from_masks(self,masks,type=None,window_sec=5,minQuantile=20):
+    def extract_traces_from_masks(self,masks,type_=None,window_sec=5,minQuantile=20):
         """
                 
         
         Parameters
         ----------------------
         masks: array, 3D with each 2D slice bein a mask (integer or fractional)  
-        type: extracted fluorescence trace, if 'DFF' it will also extract DFF
+        type_: extracted fluorescence trace, if 'DFF' it will also extract DFF
         Outputs
         ----------------------
         traces: array, 2D of fluorescence traces
@@ -201,7 +202,7 @@ class XMovie(object):
         A=A/pixelsA[:,None] # obtain average over ROI
         traces=np.dot(A,np.transpose(Y))
         
-        if type == 'DFF':
+        if type_ == 'DFF':
             window=int(window_sec/self.frameRate);            
             assert window <= T, "The window must be shorter than the total length"
             tracesDFF=[]
@@ -217,7 +218,7 @@ class XMovie(object):
             
         return traces.T,tracesDFF.T
         
-    def motion_correct(self, max_shift=5, show_movie=False,template=None):
+    def motion_correct(self, max_shift_w=5,max_shift_h=5, show_movie=False,template=None):
         """
         Performs motion corretion using the opencv matchtemplate function. At every iteration a template is built by taking the median of all frames and then used to align the other frames.
          
@@ -237,11 +238,13 @@ class XMovie(object):
         self.mov=np.asarray(self.mov,dtype=np.float32);
         n_frames_,h_i, w_i = self.mov.shape
         
-        ms = max_shift
+        ms_w = max_shift_w
+        ms_h = max_shift_h
+        
         if template is None:
             template=np.median(self.mov,axis=0)            
-            template=template[ms:h_i-ms,ms:w_i-ms].astype(np.float32)
             
+        template=template[ms_h:h_i-ms_h,ms_w:w_i-ms_w].astype(np.float32)    
         h,w = template.shape      # template width and height
         
         #if show_movie:
@@ -261,7 +264,7 @@ class XMovie(object):
              sh_y,sh_x = top_left
              bottom_right = (top_left[0] + w, top_left[1] + h)
         
-             if (0 < top_left[1] < 2 * ms-1) & (0 < top_left[0] < 2 * ms-1):
+             if (0 < top_left[1] < 2 * ms_h-1) & (0 < top_left[0] < 2 * ms_w-1):
                  # if max is internal, check for subpixel shift using gaussian
                  # peak registration
                  log_xm1_y = np.log(res[sh_x-1,sh_y]);             
@@ -270,11 +273,11 @@ class XMovie(object):
                  log_x_yp1 = np.log(res[sh_x,sh_y+1]);             
                  four_log_xy = 4*np.log(res[sh_x,sh_y]);
     
-                 sh_x_n = -(sh_x - ms + (log_xm1_y - log_xp1_y) / (2 * log_xm1_y - four_log_xy + 2 * log_xp1_y))
-                 sh_y_n = -(sh_y - ms + (log_x_ym1 - log_x_yp1) / (2 * log_x_ym1 - four_log_xy + 2 * log_x_yp1))
+                 sh_x_n = -(sh_x - ms_h + (log_xm1_y - log_xp1_y) / (2 * log_xm1_y - four_log_xy + 2 * log_xp1_y))
+                 sh_y_n = -(sh_y - ms_w + (log_x_ym1 - log_x_yp1) / (2 * log_x_ym1 - four_log_xy + 2 * log_x_yp1))
              else:
-                 sh_x_n = -(sh_x - ms)
-                 sh_y_n = -(sh_y - ms)
+                 sh_x_n = -(sh_x - ms_h)
+                 sh_y_n = -(sh_y - ms_w)
                      
              M = np.float32([[1,0,sh_y_n],[0,1,sh_x_n]])
              self.mov[i] = cv2.warpAffine(frame,M,(w_i,h_i),flags=cv2.INTER_CUBIC)
@@ -483,6 +486,7 @@ class XMovie(object):
         
         """
         m1=self.copy()
+        _,h1,w1=self.mov.shape
         m1.resize(fx,fy)
         T,h,w=m1.mov.shape
         Y=np.reshape(m1.mov,(T,h*w))
@@ -495,7 +499,7 @@ class XMovie(object):
         kk=estim.fit(tradeoff_weight*mcoef-(1-tradeoff_weight)*distanceMatrix)
         labs=kk.labels_
         fovs=np.reshape(labs,(h,w))
-        fovs=cv2.resize(np.uint8(fovs),(w,h),1/fx,1/fy,interpolation=cv2.INTER_NEAREST)
+        fovs=cv2.resize(np.uint8(fovs),(w1,h1),1./fx,1./fy,interpolation=cv2.INTER_NEAREST)
         return np.uint8(fovs), mcoef, distanceMatrix
        
         
@@ -602,6 +606,6 @@ class XMovie(object):
             t,h,w=self.mov.shape
             self.mov=np.reshape(self.mov,(t,h*w))
             self.mov=cv2.resize(self.mov,(h*w,int(fz*t)),fx=1,fy=fz,interpolation=interpolation)
-            self.mov=cv2.resize(self.mov,(h*w,int(fz*t)),fx=1,fy=fz,interpolation=interpolation)
+#            self.mov=cv2.resize(self.mov,(h*w,int(fz*t)),fx=1,fy=fz,interpolation=interpolation)
             self.mov=np.reshape(self.mov,(int(fz*t),h,w))
             self.frameRate=self.frameRate/fz
