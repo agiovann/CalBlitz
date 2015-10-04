@@ -4,17 +4,17 @@ Created on Tue Jun 30 20:56:07 2015
 @author: agiovann
 """
 #%% add CalBlitz folder to python directory
-path_to_CalBlitz_folder='/Users/agiovann/Documents/SOFTWARE/CalBlitz'
+path_to_CalBlitz_folder='/home/ubuntu/SOFTWARE/CalBlitz'
+path_to_CalBlitz_folder='C:/Users/agiovann/Documents/SOFTWARE/CalBlitz/CalBlitz'
 
 import sys
 sys.path
 sys.path.append(path_to_CalBlitz_folder)
 #% add required packages
-from XMovie import XMovie
+import calblitz as cb
 import time
-from pylab import plt
+import pylab as pl
 import numpy as np
-from utils import matrixMontage
 #% set basic ipython functionalities
 try: 
     pl.ion()
@@ -31,98 +31,154 @@ except:
 
 #filename='20150522_1_1_001.tif'
        
-#filename='M_FLUO.tif'
-#frameRate=.064;
+#filename='ac_001_001.tif'
+#frameRate=.033;
 
 #data_type='fly'
 #filename='20150522_1_1_001.tif'
 #frameRate=.128;
 
-filename='agchr2_030915_01_040315_a_freestyleshake_01_cam1.avi'
-frameRate=0.0083;
+#filename='agchr2_030915_01_040215_a_freestyle_01_cam1.avi'
+#frameRate=0.0083;
 
 #filename='img007.tif'
 #frameRate=0.033;
 
-filename='k26_v1_176um_target_pursuit_002_013.tif'
-frameRate=0.033
+
+#filename='img001.tif'
+#filename='img002.tif'
+#frameRate=0.033;
+
+filename='M_FLUO.tif'
+frameRate=1./.064;
+start_time=0;
 
 #%%
+filename_py=filename[:-4]+'.npz'
+filename_hdf5=filename[:-4]+'.hdf5'
 filename_mc=filename[:-4]+'_mc.npz'
 filename_analysis=filename[:-4]+'_analysis.npz'    
 filename_traces=filename[:-4]+'_traces.npz'    
 
 #%% load movie
-m=XMovie(filename, frameRate=frameRate);
+m=cb.movie(filename, fr=frameRate,start_time=start_time);
 
 #%% example plot a frame
-pl.imshow(m.mov[100],cmap=pl.cm.Greys_r)
+pl.imshow(m[100],cmap=pl.cm.Greys_r)
 
 #%% example play movie
-m.playMovie(frate=.03,gain=100.0,magnification=.5,offset=100)
+m.play(fr=20,gain=1.0,magnification=1)
 
 #%% example take first channel of two
 channelId=1;
 totalChannels=2;
 m.makeSubMov(range(channelId-1,m.mov.shape[0],totalChannels))
 
+#%%
+m.save(filename_py)
+
+
+#%%
+f = h5py.File(filename_hdf5, "w")
+dset = f.create_dataset("mov",data=m.mov)
+dset = f.create_dataset("frameRate",data=frameRate)
+a=np.asarray(f['mov']) # or directly use f['mov']
+
+#%%
+m=cb.movie.load(filename_py); 
+m=m.crop(crop_top=0,crop_bottom=1,crop_left=0,crop_right=0,crop_begin=0,crop_end=0);
+
 #%%  prtition into two movies up and down
 
-m.crop(crop_top=150,crop_bottom=150,crop_left=150,crop_right=150,crop_begin=0,crop_end=0)
+m.makeSubMov(range(1000))
+#m.crop(crop_top=150,crop_bottom=150,crop_left=150,crop_right=150,crop_begin=0,crop_end=0)
 
 
 #%% concatenate movies (it will add to the original movie)
 # you have to create another movie new_mov=XMovie(...)
-m.append(new_mov)
+cb.concatenate([m,new_mov])
 
 #%% motion correct run 3 times
 # WHEN YOU RUN motion_correct YOUR ARE MODIFYING THE OBJECT!!!!
+
 templates=[];
 shifts=[];
-
-max_shift=10;
+corrs=[]
+max_shift_w=5;
+max_shift_h=5;
 num_iter=3; # numer of times motion correction is executed
 template=None # here you can use your own template (best representation of the FOV)
-
+print np.min(m)
 for j in range(0,num_iter):
-    template_used,shift=m.motion_correct(max_shift=max_shift,template=None,show_movie=False);
+    m,template_used,shift,corrs=m.motion_correct(max_shift_w=max_shift_w,max_shift_h=max_shift_h,template=None,show_movie=False);
     templates.append(template_used)
     shift=np.asarray(shift)
     shifts.append(shift)
-
+    corrs.append(corrs)
+    
 pl.plot(np.asarray(shifts).reshape((j+1)*shift.shape[0],shift.shape[1]))
 
+#%% motion correct Cristina
+initTime=time.time()
+
+m=XMovie(mat=np.load(filename_py)['mov'], frameRate=np.load(filename_py)['frameRate']); 
+m.makeSubMov(range(2000))
+m.crop(crop_top=0,crop_bottom=1,crop_left=0,crop_right=0,crop_begin=0,crop_end=0)
+m_tmp=m.copy()
+_,shift=m_tmp.motion_correct(max_shift_w=60,max_shift_h=20,template=None,show_movie=False);
+template=np.median(m_tmp.mov,axis=0)
+m_tmp=m.copy()
+_,shift=m_tmp.motion_correct(max_shift_w=60,max_shift_h=20,template=template,show_movie=False);
+template=np.median(m_tmp.mov,axis=0)
+
+m=XMovie(mat=np.load(filename_py)['mov'], frameRate=np.load(filename_py)['frameRate']); 
+m.crop(crop_top=0,crop_bottom=1,crop_left=0,crop_right=0,crop_begin=0,crop_end=0)
+_,shifts=m.motion_correct(max_shift_w=100,max_shift_h=20,template=template,show_movie=False);
+    
+print 'elapsed time:' + str(time.time()-initTime) 
+#%%
+cb.matrixMontage(np.asarray(templates),cmap=pl.cm.gray,vmin=0,vmax=1000)
 
 
+
+#%% apply shifts to original movie in order to minimize smoothing
+if False:
+    m=cb.movie.load(filename_py); 
+    m=m.crop(crop_top=0,crop_bottom=1,crop_left=0,crop_right=0,crop_begin=0,crop_end=0);
+    totalShifts=np.sum(np.asarray(shifts),axis=0)[:,0:2].tolist()
+    m=m.applyShifstToMovie(totalShifts)
+    
+    
+    
+    
 #%% apply shifts to another channel, you need to reload the original movie other channel (mov_other_channel)
 if False:    
     # here reload the original imaging channel from movie
     totalShifts=np.sum(np.asarray(shifts),axis=0)[:,0:2].tolist()
     mov_other_channel.applyShifstToMovie(totalShifts)
-    
-#%% if you want to apply the shifts only ones to reduce the smoothing
-if False:
-    totalShifts=np.sum(np.asarray(shifts),axis=0)[:,0:2].tolist()
-    m=XMovie(filename, frameRate=frameRate);
-    m.applyShifstToMovie(totalShifts)
-    
-    
+
 #%% plot movie median
-minBrightness=None;
-maxBrightness=None;
-medMov=np.median(m.mov,axis=0)
-pl.imshow(medMov,cmap=pl.cm.Greys_r,vmin=minBrightness,vmax=maxBrightness)
+minBrightness=20;
+maxBrightness=500;
+pl.imshow(np.median(m,axis=0),cmap=pl.cm.Greys_r,vmin=minBrightness,vmax=maxBrightness)
 
 #%% save motion corrected movie inpython format along with the results. This takes some time now but will save  a lot later...
-np.savez(filename_mc,mov=m.mov,frameRate=frameRate,templates=templates,shifts=shifts,max_shift=max_shift)
+np.savez(filename_mc,templates=templates,shifts=shifts,max_shift_h=max_shift_h,max_shift_w=max_shift_w)
 
 #%% RELOAD MOTION CORRECTED MOVIE
-m=XMovie(mat=np.load(filename_mc)['mov'], frameRate=frameRate);    
-max_shift=np.load(filename_mc)['max_shift']
+m=cb.movie.load(filename_py); 
+m=m.crop(crop_top=0,crop_bottom=1,crop_left=0,crop_right=0,crop_begin=0,crop_end=0);
+shifts=np.load(filename_mc)['shifts']
+totalShifts=np.sum(np.asarray(shifts),axis=0)[:,0:2].tolist()
+m=m.apply_shifts(totalShifts) 
+max_h,max_w= np.percentile(totalShifts,99,axis=0)
+min_h,min_w= np.percentile(totalShifts,1,axis=0)
+
+#max_h,max_w= np.max(totalShifts,axis=0)
+#min_h,min_w= np.min(totalShifts,axis=0)
 
 
-#%% crop movie after motion correction. 
-m.crop(max_shift,max_shift,max_shift,max_shift)    
+m=m.crop(crop_top=max_h,crop_bottom=-min_h+1,crop_left=max_w,crop_right=-min_w,crop_begin=0,crop_end=0)
 
 #%% if you want to make a copy of the movie
 if False:
@@ -132,16 +188,16 @@ if False:
 #%% resize to increase SNR and have better convergence of segmentation algorithms
 resizeMovie=True
 if resizeMovie:
-    fx=.4; # downsample a factor of four along x axis
-    fy=.4;
+    fx=1; # downsample a factor of four along x axis
+    fy=1;
     fz=.2; # downsample  a factor of 5 across time dimension
-    m.resize(fx=fx,fy=fy,fz=fx)
+    m=m.resize(fx=fx,fy=fy,fz=fz)
 else:
     fx,fy,fz=1,1,1
 
 #%% compute delta f over f (DF/F)
 initTime=time.time()
-m.computeDFF(secsWindow=15,quantilMin=20,subtract_minimum=False)
+m=m.computeDFF(secsWindow=10,quantilMin=50)
 print 'elapsed time:' + str(time.time()-initTime) 
 
 #%% compute subregions where to apply more efficiently facrtorization algorithms
@@ -151,31 +207,31 @@ pl.imshow(fovs)
 #%% create a denoised version of the movie, nice to visualize
 if True:
     m2=m.copy()
-    m2.IPCA_denoise(components = 100, batch = 5000)
-    m2.playMovie(frate=.05,magnification=10,gain=1.0)
+    m2.IPCA_denoise(components = 100, batch = 1000)
+    m2.playMovie(frate=.05,magnification=1,gain=2.0)
     
 #%%
-    
 
 #%% compute spatial components via NMF
 initTime=time.time()
-space_spcomps,time_comps=m.NonnegativeMatrixFactorization(n_components=20,beta=1,tol=5e-7);
+space_spcomps,time_comps=(m-np.min(m)).NonnegativeMatrixFactorization(n_components=20,beta=1,tol=5e-7);
 print 'elapsed time:' + str(time.time()-initTime) 
-matrixMontage(np.asarray(space_spcomps),cmap=pl.cm.gray) # visualize components
+cb.matrixMontage(np.asarray(space_spcomps),cmap=pl.cm.gray) # visualize components
 
 #%% compute spatial components via ICA PCA
+from scipy.stats import mode
 initTime=time.time()
-spcomps=m.IPCA_stICA(components=20,mu=.5,batch = 5000);
+spcomps=m.IPCA_stICA(components=20,mu=.5,batch=10000);
 print 'elapsed time:' + str(time.time()-initTime) 
-matrixMontage(spcomps,cmap=pl.cm.gray) # visualize components
+cb.matrixMontage(spcomps,cmap=pl.cm.gray) # visualize components
  
 #%% extract ROIs from spatial components 
 #_masks,masks_grouped=m.extractROIsFromPCAICA(spcomps, numSTD=6, gaussiansigmax=2 , gaussiansigmay=2)
-_masks,_=m.extractROIsFromPCAICA(spcomps, numSTD=10.0, gaussiansigmax=1 , gaussiansigmay=1)
-matrixMontage(np.asarray(_masks),cmap=pl.cm.gray)
+_masks,_=m.extractROIsFromPCAICA(spcomps, numSTD=10.0, gaussiansigmax=0 , gaussiansigmay=0)
+cb.matrixMontage(np.asarray(_masks),cmap=pl.cm.gray)
 
 #%%  extract single ROIs from each mask
-minPixels=5;
+minPixels=10;
 maxPixels=2500;
 masks_tmp=[];
 for mask in _masks:
@@ -183,36 +239,50 @@ for mask in _masks:
     if (numPixels>minPixels and numPixels<maxPixels):
         print numPixels
         masks_tmp.append(mask>0)
+        
 masks_tmp=np.asarray(masks_tmp,dtype=np.float16)
 
 # reshape dendrites if required(if the movie was resized)
 if fx != 1 or fy !=1:
-    mdend=XMovie(mat=np.asarray(masks_tmp,dtype=np.float32), frameRate=1);
-    mdend.resize(fx=1/fx,fy=1/fy)
-    all_masks=mdend.mov;
+    mdend=cb.movie(np.asarray(masks_tmp,dtype=np.float32), fr=1,start_time=0);
+    mdend=mdend.resize(fx=1/fx,fy=1/fy)
+    all_masks=mdend;
 else:
     all_masks=masks_tmp              
 
-    all_masksForPlot=[np.round(kk)*(ii+1)*1.0 for ii,kk in enumerate(all_masks)]
+all_masksForPlot=[kk*(ii+1)*1.0 for ii,kk in enumerate(all_masks)]
 pl.imshow(np.max(np.asarray(all_masksForPlot,dtype=np.float16),axis=0))
 
 
 #%% extract DF/F from orginal movie, needs to reload the motion corrected movie
-m=XMovie(mat=np.load(filename_mc)['mov'], frameRate=frameRate);    
-m.crop(max_shift,max_shift,max_shift,max_shift)    
-minPercentileRemove=1;
+m=cb.movie.load(filename_py); 
+m=m.crop(crop_top=0,crop_bottom=1,crop_left=0,crop_right=0,crop_begin=0,crop_end=0);
+shifts=np.load(filename_mc)['shifts']
+totalShifts=np.sum(np.asarray(shifts),axis=0)[:,0:2].tolist()
+m=m.apply_shifts(totalShifts) 
+max_h,max_w= np.percentile(totalShifts,99,axis=0)
+min_h,min_w= np.percentile(totalShifts,1,axis=0)
+#max_h,max_w= np.max(totalShifts,axis=0)
+#min_h,min_w= np.min(totalShifts,axis=0)
+m=m.crop(crop_top=max_h,crop_bottom=-min_h+1,crop_left=max_w,crop_right=-min_w,crop_begin=0,crop_end=0)
+ 
+minPercentileRemove=.1;
 # remove an estimation of what a Dark patch is, you should provide a better estimate
-F0=np.percentile(m.mov,minPercentileRemove)
-m.mov=m.mov-F0; 
-pl.plot(tracesDFF)
+F0=np.percentile(m,minPercentileRemove)
+m=m-F0; 
+traces = m.extract_traces_from_masks(all_masks)
+#,type='DFF',window_sec=15,minQuantile=8
+traces=traces.computeDFF(window_sec=1,minQuantile=8);
+traces.plot()
 
 
 #%%
-pl.imshow(tracesDFF.T)
+pl.imshow(traces.T,aspect='auto',interpolation='none')
 
 
 #%% save the results of the analysis in python format
-np.savez(filename_analysis,all_masks=all_masks,spcomps=spcomps,fx=fx,fy=fy,fz=fz,traces=traces,tracesDFF=tracesDFF)
+traces.save('traces.npz')
+np.savez(filename_analysis,all_masks=all_masks,spcomps=spcomps,fx=fx,fy=fy,fz=fz)
 
 #%% save the results of the analysis and motion corrected movie in matlab format
 import scipy.io as sio
