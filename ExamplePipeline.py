@@ -146,7 +146,8 @@ if False:
     m=cb.movie.load(filename_py); 
     m=m.crop(crop_top=0,crop_bottom=1,crop_left=0,crop_right=0,crop_begin=0,crop_end=0);
     totalShifts=np.sum(np.asarray(shifts),axis=0)[:,0:2].tolist()
-    m=m.applyShifstToMovie(totalShifts)
+    m=m.apply_shifts(totalShifts)
+
     
     
     
