@@ -23,6 +23,11 @@ except:
     1
 from scipy.ndimage.filters import gaussian_filter
 from scipy.ndimage import label
+
+from skimage.transform import warp, AffineTransform
+from skimage.feature import match_template
+from skimage import data
+
 import timeseries as ts
 from traces import trace
 
@@ -160,7 +165,7 @@ class movie(ts.timeseries):
         return allMasks,maskgrouped            
 
     
-    def motion_correct(self, max_shift_w=5,max_shift_h=5, show_movie=False,template=None):
+    def motion_correct(self, max_shift_w=5,max_shift_h=5, show_movie=False,template=None,method='opencv'):
         """
         Performs motion corretion using the opencv matchtemplate function. At every iteration a template is built by taking the median of all frames and then used to align the other frames.
          
@@ -174,6 +179,7 @@ class movie(ts.timeseries):
         movCorr: motion corected movie              
         shifts : tuple, contains shifts in x and y and correlation with template
         template: the templates created at each iteration
+        method: depends on what is installed 'opencv' or 'skimage' 
         """
         
         if np.percentile(self,1)<0:
@@ -201,9 +207,101 @@ class movie(ts.timeseries):
         for i,frame in enumerate(self):
              if i%100==99:
                  print "Frame %i"%(i+1);
-             res = cv2.matchTemplate(frame,template,cv2.TM_CCORR_NORMED)
+             if method == 'opencv':
+                 res = cv2.matchTemplate(frame,template,cv2.TM_CCORR_NORMED)             
+                 top_left = cv2.minMaxLoc(res)[3]
+             elif method == 'skimage':
+                 res = match_template(frame,template)                 
+                 top_left = np.unravel_index(np.argmax(res),res.shape);
+                 top_left=top_left[::-1]   
+
              avg_corr=np.mean(res);
-             top_left = cv2.minMaxLoc(res)[3]
+             sh_y,sh_x = top_left
+             bottom_right = (top_left[0] + w, top_left[1] + h)
+        
+             if (0 < top_left[1] < 2 * ms_h-1) & (0 < top_left[0] < 2 * ms_w-1):
+                 # if max is internal, check for subpixel shift using gaussian
+                 # peak registration
+                 log_xm1_y = np.log(res[sh_x-1,sh_y]);             
+                 log_xp1_y = np.log(res[sh_x+1,sh_y]);             
+                 log_x_ym1 = np.log(res[sh_x,sh_y-1]);             
+                 log_x_yp1 = np.log(res[sh_x,sh_y+1]);             
+                 four_log_xy = 4*np.log(res[sh_x,sh_y]);
+    
+                 sh_x_n = -(sh_x - ms_h + (log_xm1_y - log_xp1_y) / (2 * log_xm1_y - four_log_xy + 2 * log_xp1_y))
+                 sh_y_n = -(sh_y - ms_w + (log_x_ym1 - log_x_yp1) / (2 * log_x_ym1 - four_log_xy + 2 * log_x_yp1))
+             else:
+                 sh_x_n = -(sh_x - ms_h)
+                 sh_y_n = -(sh_y - ms_w)
+             if method == 'opencv':        
+                 M = np.float32([[1,0,sh_y_n],[0,1,sh_x_n]])
+                 self[i] = cv2.warpAffine(frame,M,(w_i,h_i),flags=cv2.INTER_CUBIC)
+             elif method == 'skimage':
+                 tform = AffineTransform(translation=(-sh_y_n,-sh_x_n))             
+                 self[i] = warp(frame, tform,preserve_range=True,order=3)
+                 
+
+             shifts.append([sh_x_n,sh_y_n]) 
+             xcorrs.append([avg_corr])
+             
+             if show_movie:        
+                 fr = cv2.resize(self[i],None,fx=2, fy=2, interpolation = cv2.INTER_CUBIC)
+                 cv2.imshow('frame',fr/255.0)
+                 if cv2.waitKey(1) & 0xFF == ord('q'):
+                     cv2.destroyAllWindows()
+                     break 
+                 
+        cv2.destroyAllWindows()
+        return (self,template,shifts,xcorrs)
+        
+    def motion_correct_scikit(self, max_shift_w=5,max_shift_h=5, show_movie=False,template=None):
+        """
+        Performs motion corretion using the opencv matchtemplate function. At every iteration a template is built by taking the median of all frames and then used to align the other frames.
+         
+        Parameters
+        ----------
+        max_shift: maximum pixel shifts allowed when correcting
+        show_movie : display the movie wile correcting it
+         
+        Returns
+        -------
+        movCorr: motion corected movie              
+        shifts : tuple, contains shifts in x and y and correlation with template
+        template: the templates created at each iteration
+        """
+        
+        if np.percentile(self,1)<0:
+            raise ValueError('The movie must only contain positive values')
+            
+        
+        self=np.asanyarray(self,dtype=np.float32)
+        
+#        self=(self-np.min(self))/(np.max(self)-np.min(self))        
+            
+            
+        n_frames_,h_i, w_i = self.shape
+        
+        ms_w = max_shift_w
+        ms_h = max_shift_h
+        
+        if template is None:
+            template=np.median(self,axis=0)            
+            
+        template=template[ms_h:h_i-ms_h,ms_w:w_i-ms_w].astype(np.float32)    
+        h,w = template.shape      # template width and height
+        
+        
+        #% run algorithm, press q to stop it 
+        shifts=[];   # store the amount of shift in each frame
+        xcorrs=[];
+        
+        for i,frame in enumerate(self):
+             if i%100==99:
+                 print "Frame %i"%(i+1);
+             res = match_template(frame,template)
+             avg_corr=np.mean(res);
+             top_left = np.unravel_index(np.argmax(res),res.shape);
+             top_left=top_left[::-1]             
              sh_y,sh_x = top_left
              bottom_right = (top_left[0] + w, top_left[1] + h)
         
@@ -222,11 +320,18 @@ class movie(ts.timeseries):
                  sh_x_n = -(sh_x - ms_h)
                  sh_y_n = -(sh_y - ms_w)
                      
-             M = np.float32([[1,0,sh_y_n],[0,1,sh_x_n]])
-             self[i] = cv2.warpAffine(frame,M,(w_i,h_i),flags=cv2.INTER_CUBIC)
+#             M = np.float32([[1,0,sh_y_n],[0,1,sh_x_n]])
+#             tform = AffineTransform(matrix=M)
+             tform = AffineTransform(translation=(-sh_y_n,-sh_x_n))             
+             self[i] = warp(frame, tform,preserve_range=True,order=3)
+             
+#             M = np.float32([[1,0,sh_y_n],[0,1,sh_x_n]])
+#             self[i] = cv2.warpAffine(frame,M,(w_i,h_i),flags=cv2.INTER_CUBIC)
 
              shifts.append([sh_x_n,sh_y_n]) 
              xcorrs.append([avg_corr])
+             
+                         
              
              if show_movie:        
                  fr = cv2.resize(self[i],None,fx=2, fy=2, interpolation = cv2.INTER_CUBIC)
@@ -237,6 +342,7 @@ class movie(ts.timeseries):
                  
         cv2.destroyAllWindows()
         return (self,template,shifts,xcorrs)
+        
         
         
     def apply_shifts(self, shifts,interpolation='linear'):
@@ -623,16 +729,19 @@ class movie(ts.timeseries):
 if __name__ == "__main__":
     mov=movie('/Users/agiovann/Dropbox/Preanalyzed Data/ExamplesDataAnalysis/Andrea/PC1/M_FLUO.tif',fr=15.62,start_time=0,meta_data={'zoom':2,'location':[100, 200, 300]})
     mov1=movie('/Users/agiovann/Dropbox/Preanalyzed Data/ExamplesDataAnalysis/Andrea/PC1/M_FLUO.tif',fr=15.62,start_time=0,meta_data={'zoom':2,'location':[100, 200, 300]})    
-    newmov=ts.concatenate([mov,mov1])    
-    mov.save('./test.npz')
-    mov=movie.load('test.npz')
+#    newmov=ts.concatenate([mov,mov1])    
+#    mov.save('./test.npz')
+#    mov=movie.load('test.npz')
     max_shift=5;
-    _,template,shifts,xcorrs=mov.motion_correct(max_shift_h=max_shift,max_shift_w=max_shift,show_movie=0)
-    mov=mov.apply_shifts(shifts)    
-    mov=mov.crop(crop_top=max_shift,crop_bottom=max_shift,crop_left=max_shift,crop_right=max_shift)    
-    mov=mov.resize(fx=.25,fy=.25,fz=.2)    
-    mov=mov.computeDFF()      
-    mov=mov-np.min(mov)
-    space_components,time_components=mov.NonnegativeMatrixFactorization();
-    trs=mov.extract_traces_from_masks(1.*(space_components>0.4))
-    trs=trs.computeDFF()
+    mov,template,shifts,xcorrs=mov.motion_correct(max_shift_h=max_shift,max_shift_w=max_shift,show_movie=0)
+    max_shift=5;
+    mov1,template1,shifts1,xcorrs1=mov1.motion_correct(max_shift_h=max_shift,max_shift_w=max_shift,show_movie=0,method='skimage')
+    
+#    mov=mov.apply_shifts(shifts)    
+#    mov=mov.crop(crop_top=max_shift,crop_bottom=max_shift,crop_left=max_shift,crop_right=max_shift)    
+#    mov=mov.resize(fx=.25,fy=.25,fz=.2)    
+#    mov=mov.computeDFF()      
+#    mov=mov-np.min(mov)
+#    space_components,time_components=mov.NonnegativeMatrixFactorization();
+#    trs=mov.extract_traces_from_masks(1.*(space_components>0.4))
+#    trs=trs.computeDFF()
