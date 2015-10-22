@@ -36,26 +36,25 @@ class timeseries(np.ndarray):
     Parameters
     ----------
     input_arr: np.ndarray 
-    start_time: time beginning movie
     fr: frame rate
+    start_time: time beginning movie
+    
     meta_data: dictionary including any custom meta data
 
     """
     
-    def __new__(cls, input_arr, start_time=None,fr=None,meta_data=None,file_name=None):
+    def __new__(cls, input_arr, fr=None,start_time=0,file_name=None, meta_data=None):
         #         
         
-        if fr is None or start_time is None:        
-            raise Exception('You need to specify both the start time and frame rate')
-        
-        # case we load movie from file
-       
+        if fr is None:      
+            raise Exception('You need to specify the frame rate')
+               
             
         obj = np.asarray(input_arr).view(cls)
         # add the new attribute to the created instance
                 
-        obj.start_time = start_time*1.
-        obj.fr = fr*1.
+        obj.start_time = np.double(start_time)
+        obj.fr = np.double(fr)
         if type(file_name) is list:
             obj.file_name = file_name
         else:
@@ -65,8 +64,7 @@ class timeseries(np.ndarray):
             obj.meta_data = meta_data
         else:
             obj.meta_data = [meta_data];    
-        
-        
+              
         return obj
         
     @property
@@ -134,7 +132,7 @@ class timeseries(np.ndarray):
 
 def concatenate(*args,**kwargs):
         """
-        Append the movie mov to the object
+        Concatenate movies
         
         Parameters
         ---------------------------
@@ -155,7 +153,7 @@ def concatenate(*args,**kwargs):
                         obj.__dict__['meta_data'].extend([ls for ls in m.meta_data])
                         if obj.fr != m.fr:
                             raise ValueError('Frame rates of input vectors do not match. You cannot concatenate movies with different frame rates.') 
-        print obj
+        
         return obj.__class__(np.concatenate(*args,**kwargs),**obj.__dict__)   
         
         

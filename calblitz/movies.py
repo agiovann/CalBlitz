@@ -21,8 +21,7 @@ try:
     plt.ion()
 except:
     1
-from scipy.ndimage.filters import gaussian_filter
-from scipy.ndimage import label
+
 
 from skimage.transform import warp, AffineTransform
 from skimage.feature import match_template
@@ -36,133 +35,41 @@ from traces import trace
 #%%
 class movie(ts.timeseries):
     """ 
-    Class representing a movie.
+    Class representing a movie. This class subclasses timeseries, that in turn subclasses ndarray
 
-    Example of usage
+    movie(input_arr, fr=None,start_time=0,file_name=None, meta_data=None)
     
-    input_arr='filename_tiff.tif'
+    Example of usage
+    ----------
+    input_arr = 3d ndarray
     fr=33; # 33 Hz
     start_time=0
     m=movie(input_arr, start_time=0,fr=33);
     
     Parameters
     ----------
-    input_arr: can be either a file name (tif, avi, npy) or an np.ndarray (width x height x time)
-    start_time: time beginning movie
+    input_arr:  np.ndarray, 3D, (time,height,width)
     fr: frame rate
+    start_time: time beginning movie, if None it is assumed 0    
     meta_data: dictionary including any custom meta data
+    file_name:name associated with the file (for instance path to the original file)
 
     """
-    def __new__(cls, input_arr,**kwargs):
-        #         
+#    def __new__(cls, input_arr,fr=None,start_time=0,file_name=None, meta_data=None,**kwargs):        
+    def __new__(cls, input_arr,**kwargs):   
         
-        # case we load movie from file
-        if type(input_arr) is str:
-            file_name = input_arr
+        if type(input_arr) is np.ndarray:            
+#            kwargs['start_time']=start_time;
+#            kwargs['file_name']=file_name;
+#            kwargs['meta_data']=meta_data;
+            #kwargs['fr']=fr;                    
+            return super(movie, cls).__new__(cls, input_arr,**kwargs)
             
-            
-            kwargs['file_name']=file_name
-                
-            extension = os.path.splitext(file_name)[1]
-
-            if extension == '.tif': # load avi file
-
-                input_arr = np.array(pims.open(file_name))            
-                # necessary for the way pims work with tiffs  
-                input_arr = np.swapaxes(input_arr,1,2)       
-                input_arr = input_arr[:,:,::-1]
-
-            elif extension == '.avi': # load avi file
-
-                cap = cv2.VideoCapture(file_name)
-                length = int(cap.get(cv2.cv.CV_CAP_PROP_FRAME_COUNT))
-                width  = int(cap.get(cv2.cv.CV_CAP_PROP_FRAME_WIDTH))
-                height = int(cap.get(cv2.cv.CV_CAP_PROP_FRAME_HEIGHT))
-                
-                input_arr=np.zeros((length, height,width),dtype=np.uint8)
-                counter=0
-                ret=True
-                while True:
-                    # Capture frame-by-frame
-                    ret, frame = cap.read()
-                    if not ret:
-                        break
-                    input_arr[counter]=frame[:,:,0]
-                    counter=counter+1
-                    if not counter%100:
-                        print counter
-                
-                # When everything done, release the capture
-                cap.release()
-                cv2.destroyAllWindows()   
-                
-            elif extension == '.npy': # load avi file                             
-                input_arr=np.load(file_name)
-            else:
-                raise Exception('Unknown file type_')
-            
-        return super(movie, cls).__new__(cls, input_arr, **kwargs)
+        else:
+            raise Exception('Input must be an ndarray, use load instead!')
         
        
-        
-
-#    
-    
-    @staticmethod
-    def load(file_name):
-        '''
-        load movie from file
-        '''
-        return movie(**np.load(file_name))  
-        
-    @staticmethod
-    def extractROIsFromPCAICA(spcomps, numSTD=4, gaussiansigmax=2 , gaussiansigmay=2):
-        """
-        Given the spatial components output of the IPCA_stICA function extract possible regions of interest
-        The algorithm estimates the significance of a components by thresholding the components after gaussian smoothing
-        Parameters
-        -----------
-        spcompomps, 3d array containing the spatial components
-        numSTD: number of standard deviation above the mean of the spatial component to be considered signiificant
-        """        
-        
-        numcomps, width, height=spcomps.shape
-        rowcols=int(np.ceil(np.sqrt(numcomps)));  
-        
-        #%
-        allMasks=[];
-        maskgrouped=[];
-        for k in xrange(0,numcomps):
-            comp=spcomps[k]
-#            plt.subplot(rowcols,rowcols,k+1)
-            comp=gaussian_filter(comp,[gaussiansigmay,gaussiansigmax])
-            
-            maxc=np.percentile(comp,99);
-            minc=np.percentile(comp,1);
-#            comp=np.sign(maxc-np.abs(minc))*comp;
-            q75, q25 = np.percentile(comp, [75 ,25])
-            iqr = q75 - q25
-            minCompValuePos=np.median(comp)+numSTD*iqr/1.35;  
-            minCompValueNeg=np.median(comp)-numSTD*iqr/1.35;            
-
-            # got both positive and negative large magnitude pixels
-            compabspos=comp*(comp>minCompValuePos)-comp*(comp<minCompValueNeg);
-
-
-            #height, width = compabs.shape
-            labeledpos, n = label(compabspos>0, np.ones((3,3)))
-            maskgrouped.append(labeledpos)
-            for jj in range(1,n+1):
-                tmp_mask=np.asarray(labeledpos==jj)
-                allMasks.append(tmp_mask)
-#            labeledneg, n = label(compabsneg>0, np.ones((3,3)))
-#            maskgrouped.append(labeledneg)
-#            for jj in range(n):
-#                tmp_mask=np.asarray(labeledneg==jj)
-#                allMasks.append(tmp_mask)
-#            plt.imshow(labeled)                             
-#            plt.axis('off')         
-        return allMasks,maskgrouped            
+               
 
     
     def motion_correct(self, max_shift_w=5,max_shift_h=5, show_movie=False,template=None,method='opencv'):
@@ -173,16 +80,18 @@ class movie(ts.timeseries):
         ----------
         max_shift: maximum pixel shifts allowed when correcting
         show_movie : display the movie wile correcting it
+        template: the templates created at each iteration
+        method: depends on what is installed 'opencv' or 'skimage' 
          
         Returns
         -------
         movCorr: motion corected movie              
+        template
         shifts : tuple, contains shifts in x and y and correlation with template
-        template: the templates created at each iteration
-        method: depends on what is installed 'opencv' or 'skimage' 
+        xcorrs: cross correlation of the movies with the template
         """
         
-        if np.percentile(self,1)<0:
+        if np.percentile(self,1)<=0:
             raise ValueError('The movie must only contain positive values')
             
         
@@ -344,6 +253,8 @@ class movie(ts.timeseries):
         return (self,template,shifts,xcorrs)
         
         
+
+        
         
     def apply_shifts(self, shifts,interpolation='linear'):
         """ 
@@ -358,12 +269,24 @@ class movie(ts.timeseries):
         
         if interpolation == 'cubic':            
             interpolation=cv2.INTER_CUBIC
+            print 'cubic interpolation'
             
         elif interpolation == 'nearest':            
             interpolation=cv2.INTER_NEAREST 
+            print 'nearest interpolation'
             
         elif interpolation == 'linear':            
             interpolation=cv2.INTER_LINEAR
+            print 'linear interpolation'
+        elif interpolation == 'area':            
+            interpolation=cv2.INTER_AREA
+            print 'area interpolation'
+        elif interpolation == 'lanczos4':            
+            interpolation=cv2.INTER_LANCZOS4
+            print 'lanczos interpolation'            
+            
+        else:
+            raise Exception('Interpolation method not available')
     
             
         t,h,w=self.shape
@@ -695,7 +618,7 @@ class movie(ts.timeseries):
       
     
     
-    def play(self,gain=1,fr=None,magnification=2,offset=0):
+    def play(self,gain=1,fr=None,magnification=1,offset=0,interpolation=cv2.INTER_LINEAR):
          """
          Play the movie using opencv
          
@@ -709,7 +632,9 @@ class movie(ts.timeseries):
          if fr==None:
             fr=self.fr
          for frame in self:
-            frame = cv2.resize(frame,None,fx=magnification, fy=magnification, interpolation = cv2.INTER_CUBIC)
+            if magnification != 1:
+                frame = cv2.resize(frame,None,fx=magnification, fy=magnification, interpolation = interpolation)
+                
             cv2.imshow('frame',(offset+frame)*gain/maxmov)
             if cv2.waitKey(int(1./fr*1000)) & 0xFF == ord('q'):
                 cv2.destroyAllWindows()
@@ -719,7 +644,70 @@ class movie(ts.timeseries):
 
     
 
+def load(file_name,fr=None,start_time=0,meta_data=None,subindices=None):
+    '''
+    load movie from file
+    '''
+    
+    # case we load movie from file
+    if os.path.exists(file_name):        
+            
+        extension = os.path.splitext(file_name)[1]
+
+        if extension == '.tif': # load avi file
+            #raise Exception('Use sintax mov=cb.load(filename)')
+            
+            with pims.open(file_name) as f:
+                if subindices is None:
+                    input_arr = np.array(f)    
+                else:
+                    input_arr = np.array([f[j] for j in subindices])
+            
+            # necessary for the way pims work with tiffs  
+            input_arr = np.swapaxes(input_arr,1,2)       
+            input_arr = input_arr[:,:,::-1]
+
+        elif extension == '.avi': # load avi file
+            #raise Exception('Use sintax mov=cb.load(filename)')
+            if subindices is not None:
+                raise Exception('Subindices not implemented')
+            cap = cv2.VideoCapture(file_name)
+            length = int(cap.get(cv2.cv.CV_CAP_PROP_FRAME_COUNT))
+            width  = int(cap.get(cv2.cv.CV_CAP_PROP_FRAME_WIDTH))
+            height = int(cap.get(cv2.cv.CV_CAP_PROP_FRAME_HEIGHT))
+            
+            input_arr=np.zeros((length, height,width),dtype=np.uint8)
+            counter=0
+            ret=True
+            while True:
+                # Capture frame-by-frame
+                ret, frame = cap.read()
+                if not ret:
+                    break
+                input_arr[counter]=frame[:,:,0]
+                counter=counter+1
+                if not counter%100:
+                    print counter
+            
+            # When everything done, release the capture
+            cap.release()
+            cv2.destroyAllWindows()   
+            
+        elif extension == '.npy': # load npy file     
+            if subindices is not None:
+                raise Exception('Subindices not implemented')                        
+            input_arr=np.load(file_name)
+        elif extension == '.npz': # load movie from saved file                          
+            if subindices is not None:
+                raise Exception('Subindices not implemented')
+            return movie(**np.load(file_name))  
+        else:
+            raise Exception('Unknown file type')    
+    else:
+        raise Exception('File not found!')
         
+    return movie(input_arr,fr=fr,start_time=start_time,file_name=file_name, meta_data=meta_data)
+          
         
 
 
