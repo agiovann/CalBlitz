@@ -26,8 +26,14 @@ except:
 
 #%% define movie
 
-#filename='k26_v1_176um_target_pursuit_001_005.tif'
+#filename='k26_v1_176um_target_pursuit_002_013.tif'
 #frameRate=.033;
+#start_time=0;
+
+
+filename='k23_20150424_002_001.tif'
+frameRate=.033;
+start_time=0;
 
 #filename='20150522_1_1_001.tif'
        
@@ -49,9 +55,9 @@ except:
 #filename='img002.tif'
 #frameRate=0.033;
 
-filename='M_FLUO.tif'
-frameRate=1./.064;
-start_time=0;
+#filename='M_FLUO_1.tif'
+#frameRate=1./.064;
+#start_time=0;
 
 #%%
 filename_py=filename[:-4]+'.npz'
@@ -61,7 +67,11 @@ filename_analysis=filename[:-4]+'_analysis.npz'
 filename_traces=filename[:-4]+'_traces.npz'    
 
 #%% load movie
-m=cb.movie(filename, fr=frameRate,start_time=start_time);
+m=cb.load(filename, fr=frameRate,start_time=start_time);
+
+#%% load submovie
+m=cb.load(filename, fr=frameRate,start_time=start_time,subindices=range(0,1500,10));
+
 
 #%% example plot a frame
 pl.imshow(m[100],cmap=pl.cm.Greys_r)
@@ -85,18 +95,45 @@ dset = f.create_dataset("frameRate",data=frameRate)
 a=np.asarray(f['mov']) # or directly use f['mov']
 
 #%%
-m=cb.movie.load(filename_py); 
-m=m.crop(crop_top=0,crop_bottom=1,crop_left=0,crop_right=0,crop_begin=0,crop_end=0);
-
-#%%  prtition into two movies up and down
-
-m.makeSubMov(range(1000))
-#m.crop(crop_top=150,crop_bottom=150,crop_left=150,crop_right=150,crop_begin=0,crop_end=0)
-
+m=cb.load(filename_py); 
+#m=m.crop(crop_top=0,crop_bottom=1,crop_left=0,crop_right=0,crop_begin=0,crop_end=0);
+min_val_add=np.float32(np.percentile(m,.0001))
+#min_val_add=np.min(m)-100
+m=m-min_val_add
 
 #%% concatenate movies (it will add to the original movie)
 # you have to create another movie new_mov=XMovie(...)
-cb.concatenate([m,new_mov])
+conc_mov=cb.concatenate([m,m])
+
+#%% motion correct
+submov=m[range(1,1500,5),:]
+templ=np.nanmedian(submov,axis=0); # create template with portion of movie
+submov,template,shifts,xcorrs=submov.motion_correct(max_shift_w=5, max_shift_h=5, show_movie=False, template=templ, method='opencv')  #
+template=(np.nanmedian(submov,axis=0))
+pl.subplot(1,2,1)
+pl.imshow(templ,cmap=pl.cm.gray,vmin=0,vmax=200)
+pl.subplot(1,2,2)
+pl.imshow(template,cmap=pl.cm.gray,vmin=0,vmax=200)
+
+#%%
+m,template,shifts,xcorrs=m.motion_correct(max_shift_w=5, max_shift_h=5, show_movie=False, template=template, method='opencv')  #
+
+#%%
+m=cb.load(filename_py); 
+#min_val_add=np.percentile(m,.0001)
+m=m-min_val_add
+mc=m.copy().apply_shifts(shifts,interpolation='lanczos4')
+mc=cb.concatenate((m,mc*1.2),axis=2);
+mc.play(fr=100,gain=5.0,magnification=1)
+
+
+#%%
+pl.subplot(1,2,1)
+pl.imshow(np.mean(m,axis=0),cmap=pl.cm.gray,vmin=0,vmax=100)
+pl.subplot(1,2,2)
+pl.imshow(np.mean(mc,axis=0),cmap=pl.cm.gray,vmin=0,vmax=100)
+
+
 
 #%% motion correct run 3 times
 # WHEN YOU RUN motion_correct YOUR ARE MODIFYING THE OBJECT!!!!
