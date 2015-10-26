@@ -11,10 +11,12 @@ import sys
 sys.path
 sys.path.append(path_to_CalBlitz_folder)
 #% add required packages
+import h5py
 import calblitz as cb
 import time
 import pylab as pl
 import numpy as np
+import json
 #% set basic ipython functionalities
 try: 
     pl.ion()
@@ -35,7 +37,6 @@ except:
 #frameRate=8;
 #start_time=0;
 #type_='MLI'
-
 
 #filename='-431 562 27  face  20X 3X021.tif'
 #frameRate=8;
@@ -79,157 +80,23 @@ filename_mc=filename[:-4]+'_mc.npz'
 filename_analysis=filename[:-4]+'_analysis.npz'    
 filename_traces=filename[:-4]+'_traces.npz'    
 
-#%% load movie
-m=cb.load(filename, fr=frameRate,start_time=start_time);
-if type_ is 'MLI':
-    warn('Removing Channel 2')
-    m=m[::2]
-#%% load submovie
-load_sub_movie=False
-if load_sub_movie:
-    m=cb.load(filename, fr=frameRate,start_time=start_time,subindices=range(0,1500,10));
-    #% example plot a frame
-    pl.imshow(m[100],cmap=pl.cm.Greys_r)
-    
-    #% example play movie
-    m.play(fr=20,gain=1.0,magnification=1)
 
-
-
-
-#%% save movie. It takes some time but will be useful later
-m.save(filename_py)
-
-#%%
-#f = h5py.File(filename_hdf5, "w")
-#dset = f.create_dataset("mov",data=m.mov)
-#dset = f.create_dataset("frameRate",data=frameRate)
-#a=np.asarray(f['mov']) # or directly use f['mov']
-
-#%%
-m=cb.load(filename_py); 
-
-#m=m.crop(crop_top=0,crop_bottom=1,crop_left=0,crop_right=0,crop_begin=0,crop_end=0);
-min_val_add=np.float32(np.percentile(m,.0001))
-#min_val_add=np.min(m)-100
-m=m-min_val_add
-
-#%% concatenate movies (it will add to the original movie)
-# you have to create another movie new_mov=XMovie(...)
-if False:
-    conc_mov=cb.concatenate([m,m])
-
-#%% motion correct for template purpose
-max_shift_h=10
-max_shift_w=10;
-
-submov=m[::1,:]
-templ=np.nanmedian(submov,axis=0); # create template with portion of movie
-shifts,xcorrs=submov.motion_correct(max_shift_w=max_shift_w, max_shift_h=max_shift_h, template=templ, method='opencv')  #
-submov.apply_shifts(shifts,interpolation='cubic')
-template=(np.nanmedian(submov,axis=0))
-pl.subplot(1,2,1)
-pl.imshow(templ,cmap=pl.cm.gray)
-pl.subplot(1,2,2)
-pl.imshow(template,cmap=pl.cm.gray)
-
-#%% extract the shifts
-shifts,xcorrs=m.motion_correct(max_shift_w=max_shift_w, max_shift_h=max_shift_h, template=template, method='opencv')  #
-np.savez(filename_mc,template=template,shifts=shifts,xcorrs=xcorrs,max_shift_h=max_shift_h,max_shift_w=max_shift_w,min_val_add=min_val_add)
-
-#%% load and apply the shifts 
-shifts,min_val_add,xcorrs=[np.load(filename_mc)[x] for x in ['shifts','min_val_add','xcorrs']]
-m=cb.load(filename_py); 
-m=m-min_val_add
-mo=m.copy()
-m=m.apply_shifts(shifts,interpolation='lanczos4')
-#mc=m.copy().apply_shifts(shifts,interpolation='lanczos4') # use this if you see flickering
-#mc=cb.concatenate((m,mc*np.float32(1.2)),axis=2);
-
-max_h,max_w= np.percentile(shifts,99,axis=0)
-min_h,min_w= np.percentile(shifts,1,axis=0)
-#max_h,max_w= np.max(totalShifts,axis=0)
-#min_h,min_w= np.min(totalShifts,axis=0)
+#%% reload and apply shifts
+m=cb.load(filename_hdf5)
+meta_data=m.meta_data[0];
+shifts,min_val_add,xcorrs=[meta_data[x] for x in ['shifts','min_val_add','xcorrs']]
+m=m.apply_shifts(shifts,interpolation='cubic')
+#%% crop borders created by motion correction
+max_h,max_w= np.max(shifts,axis=0)
+min_h,min_w= np.min(shifts,axis=0)
 m=m.crop(crop_top=max_h,crop_bottom=-min_h+1,crop_left=max_w,crop_right=-min_w,crop_begin=0,crop_end=0)
 
-#%%
-m.play(fr=10,gain=5.0,magnification=.5)
+#%% play movie
+m.play(fr=50,gain=10.0,magnification=.5)
+#%% visualize average
+meanMov=(np.mean(m,axis=0))
+pl.imshow(meanMov,cmap=pl.cm.gray,vmax=200)
 
-pl.plot(np.mean(m,axis=(1,2)))
-pl.plot(np.mean(mo,axis=(1,2)))
-
- 
-#%%
-pl.subplot(1,2,1)
-pl.imshow(np.mean(m,axis=0),cmap=pl.cm.gray,vmin=0,vmax=250)
-pl.subplot(1,2,2)
-pl.imshow(np.mean(mo,axis=0),cmap=pl.cm.gray,vmin=0,vmax=250)
-
-
-#%%
-pl.subplot(2,1,1)
-pl.plot(shifts)
-pl.subplot(2,1,2)
-pl.plot(xcorrs) 
-
-#%%
-del mo
-
-#%% motion correct run 3 times
-# WHEN YOU RUN motion_correct YOUR ARE MODIFYING THE OBJECT!!!!
-#
-#templates=[];
-#shifts=[];
-#corrs=[]
-#max_shift_w=5;
-#max_shift_h=5;
-#num_iter=3; # numer of times motion correction is executed
-#template=None # here you can use your own template (best representation of the FOV)
-#print np.min(m)
-#for j in range(0,num_iter):
-#    m,template_used,shift,corrs=m.motion_correct(max_shift_w=max_shift_w,max_shift_h=max_shift_h,template=None,show_movie=False);
-#    templates.append(template_used)
-#    shift=np.asarray(shift)
-#    shifts.append(shift)
-#    corrs.append(corrs)
-#    
-#pl.plot(np.asarray(shifts).reshape((j+1)*shift.shape[0],shift.shape[1]))
-
-#%% motion correct Cristina
-#if is_cristina:
-#    initTime=time.time()
-#    
-#    m=XMovie(mat=np.load(filename_py)['mov'], frameRate=np.load(filename_py)['frameRate']); 
-#    m.makeSubMov(range(2000))
-#    m.crop(crop_top=0,crop_bottom=1,crop_left=0,crop_right=0,crop_begin=0,crop_end=0)
-#    m_tmp=m.copy()
-#    _,shift=m_tmp.motion_correct(max_shift_w=60,max_shift_h=20,template=None,show_movie=False);
-#    template=np.median(m_tmp.mov,axis=0)
-#    m_tmp=m.copy()
-#    _,shift=m_tmp.motion_correct(max_shift_w=60,max_shift_h=20,template=template,show_movie=False);
-#    template=np.median(m_tmp.mov,axis=0)
-#    
-#    m=XMovie(mat=np.load(filename_py)['mov'], frameRate=np.load(filename_py)['frameRate']); 
-#    m.crop(crop_top=0,crop_bottom=1,crop_left=0,crop_right=0,crop_begin=0,crop_end=0)
-#    _,shifts=m.motion_correct(max_shift_w=100,max_shift_h=20,template=template,show_movie=False);
-#        
-#    print 'elapsed time:' + str(time.time()-initTime) 
-#    
-#    
-#    
-#    cb.matrixMontage(np.asarray(templates),cmap=pl.cm.gray,vmin=0,vmax=1000)        
-
-#%% 
-medMov=np.median(mc,axis=0)
-
-#%% plot movie median
-minBrightness=0;
-maxBrightness=250;
-pl.imshow(medMov,cmap=pl.cm.Greys_r,vmin=minBrightness,vmax=maxBrightness)
-
-#%% if you want to make a copy of the movie
-if False:
-    m_copy=m.copy()
 
 #%%
 mo=m.copy()
@@ -268,14 +135,8 @@ pl.imshow(loc_corrs)
 fovs, mcoef, distanceMatrix=m.partition_FOV_KMeans(tradeoff_weight=.7,fx=.25,fy=.25,n_clusters=4,max_iter=500);
 pl.imshow(fovs)
 
-#%% create a denoised version of the movie, nice to visualize
-if False:
-    
-    m.IPCA_denoise(components = 100, batch = 10000)
-    
-    
 #%%
-spcomps=m.IPCA_io(n_components=50, fun='logcosh', max_iter=1000, tol=1e-20)
+spcomps=m.IPCA_io(n_components=50, fun='logcosh', max_iter=1000, tol=1e-7)
 spcomps=np.rollaxis(spcomps,2)
 #%% compute spatial components via NMF
 initTime=time.time()
@@ -335,7 +196,7 @@ pl.imshow(mask_show,alpha=.3,vmin=0)
 #pl.subplot(2,1,2)
 #loc_corrs=mo.local_correlations(eight_neighbours=True)
 
-
+%% STOP HERE
 #%% extract DF/F from orginal movie, needs to reload the motion corrected movie
 m=cb.movie.load(filename_py); 
 m=m.crop(crop_top=0,crop_bottom=1,crop_left=0,crop_right=0,crop_begin=0,crop_end=0);

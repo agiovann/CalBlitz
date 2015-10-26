@@ -11,10 +11,12 @@ import sys
 sys.path
 sys.path.append(path_to_CalBlitz_folder)
 #% add required packages
+import h5py
 import calblitz as cb
 import time
 import pylab as pl
 import numpy as np
+import json
 #% set basic ipython functionalities
 try: 
     pl.ion()
@@ -35,7 +37,6 @@ except:
 #frameRate=8;
 #start_time=0;
 #type_='MLI'
-
 
 #filename='-431 562 27  face  20X 3X021.tif'
 #frameRate=8;
@@ -94,21 +95,17 @@ if load_sub_movie:
     #% example play movie
     m.play(fr=20,gain=1.0,magnification=1)
 
+#%% save movie python format. Less efficient than hdf5 below
+if False:
+    m.save(filename_py)
+#%% save movie hdf5 format. fastest
+m.save(filename_hdf5)
 
-
-
-#%% save movie. It takes some time but will be useful later
-m.save(filename_py)
-
-#%%
-#f = h5py.File(filename_hdf5, "w")
-#dset = f.create_dataset("mov",data=m.mov)
-#dset = f.create_dataset("frameRate",data=frameRate)
-#a=np.asarray(f['mov']) # or directly use f['mov']
 
 #%%
 m=cb.load(filename_py); 
-
+#%%
+m=cb.load(filename_hdf5); 
 #m=m.crop(crop_top=0,crop_bottom=1,crop_left=0,crop_right=0,crop_begin=0,crop_end=0);
 min_val_add=np.float32(np.percentile(m,.0001))
 #min_val_add=np.min(m)-100
@@ -119,61 +116,61 @@ m=m-min_val_add
 if False:
     conc_mov=cb.concatenate([m,m])
 
-#%% motion correct for template purpose
-max_shift_h=10
+#%% motion correct for template purpose. Just use a subset to compute the template
+max_shift_h=10;
 max_shift_w=10;
 
-submov=m[::1,:]
+submov=m[::5,:]
 templ=np.nanmedian(submov,axis=0); # create template with portion of movie
 shifts,xcorrs=submov.motion_correct(max_shift_w=max_shift_w, max_shift_h=max_shift_h, template=templ, method='opencv')  #
 submov.apply_shifts(shifts,interpolation='cubic')
 template=(np.nanmedian(submov,axis=0))
-pl.subplot(1,2,1)
-pl.imshow(templ,cmap=pl.cm.gray)
-pl.subplot(1,2,2)
-pl.imshow(template,cmap=pl.cm.gray)
-
-#%% extract the shifts
 shifts,xcorrs=m.motion_correct(max_shift_w=max_shift_w, max_shift_h=max_shift_h, template=template, method='opencv')  #
-np.savez(filename_mc,template=template,shifts=shifts,xcorrs=xcorrs,max_shift_h=max_shift_h,max_shift_w=max_shift_w,min_val_add=min_val_add)
-
-#%% load and apply the shifts 
-shifts,min_val_add,xcorrs=[np.load(filename_mc)[x] for x in ['shifts','min_val_add','xcorrs']]
-m=cb.load(filename_py); 
+m=m.apply_shifts(shifts,interpolation='cubic')
+template=(np.median(m,axis=0))
+#pl.subplot(1,2,1)
+#pl.imshow(templ,cmap=pl.cm.gray)
+#pl.subplot(1,2,2)
+pl.imshow(template,cmap=pl.cm.gray)
+#%% now use the good template to correct
+m=cb.load(filename_hdf5);
+min_val_add=np.float32(np.percentile(m,.0001))
 m=m-min_val_add
-mo=m.copy()
-m=m.apply_shifts(shifts,interpolation='lanczos4')
-#mc=m.copy().apply_shifts(shifts,interpolation='lanczos4') # use this if you see flickering
-#mc=cb.concatenate((m,mc*np.float32(1.2)),axis=2);
+shifts,xcorrs=m.motion_correct(max_shift_w=max_shift_w, max_shift_h=max_shift_h, template=template, method='opencv')  #
+if m.meta_data[0] is None:
+    m.meta_data[0]=dict()
+    
+m.meta_data[0]['shifts']=shifts
+m.meta_data[0]['xcorrs']=xcorrs
+m.meta_data[0]['template']=template
+m.meta_data[0]['min_val_add']=min_val_add
 
-max_h,max_w= np.percentile(shifts,99,axis=0)
-min_h,min_w= np.percentile(shifts,1,axis=0)
-#max_h,max_w= np.max(totalShifts,axis=0)
-#min_h,min_w= np.min(totalShifts,axis=0)
-m=m.crop(crop_top=max_h,crop_bottom=-min_h+1,crop_left=max_w,crop_right=-min_w,crop_begin=0,crop_end=0)
+min_val_add
 
-#%%
-m.play(fr=10,gain=5.0,magnification=.5)
-
-pl.plot(np.mean(m,axis=(1,2)))
-pl.plot(np.mean(mo,axis=(1,2)))
-
- 
-#%%
-pl.subplot(1,2,1)
-pl.imshow(np.mean(m,axis=0),cmap=pl.cm.gray,vmin=0,vmax=250)
-pl.subplot(1,2,2)
-pl.imshow(np.mean(mo,axis=0),cmap=pl.cm.gray,vmin=0,vmax=250)
-
-
-#%%
+m.save(filename_hdf5)
+#%% visualize shifts
 pl.subplot(2,1,1)
 pl.plot(shifts)
 pl.subplot(2,1,2)
 pl.plot(xcorrs) 
+#%% reload and apply shifts
+m=cb.load(filename_hdf5)
+meta_data=m.meta_data[0];
+shifts,min_val_add,xcorrs=[meta_data[x] for x in ['shifts','min_val_add','xcorrs']]
+m=m.apply_shifts(shifts,interpolation='cubic')
+#%% crop borders created by motion correction
+max_h,max_w= np.max(shifts,axis=0)
+min_h,min_w= np.min(shifts,axis=0)
+m=m.crop(crop_top=max_h,crop_bottom=-min_h+1,crop_left=max_w,crop_right=-min_w,crop_begin=0,crop_end=0)
 
-#%%
-del mo
+#%% save shifts and other just for safety
+np.savez(filename_mc,template=template,shifts=shifts,xcorrs=xcorrs,max_shift_h=max_shift_h,max_shift_w=max_shift_w,min_val_add=min_val_add)
+
+#%% play movie
+m.play(fr=50,gain=10.0,magnification=.5)
+#%% visualize average
+meanMov=(np.mean(m,axis=0))
+pl.imshow(meanMov,cmap=pl.cm.gray,vmax=200)
 
 #%% motion correct run 3 times
 # WHEN YOU RUN motion_correct YOUR ARE MODIFYING THE OBJECT!!!!

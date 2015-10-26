@@ -18,8 +18,12 @@ author: Andrea Giovannucci
 import os
 import warnings
 import numpy as np
-
+import cv2
+import numpy as np
+from tifffile import imsave  
+import h5py
 import pylab as plt
+import cPickle as cpk
 try: 
     plt.ion()
 except:
@@ -111,22 +115,51 @@ class timeseries(np.ndarray):
 #        # then just call the parent
 #        return np.ndarray.__array_wrap__(self, out_arr, context)    
 #    
-    
-        
     def save(self,file_name):
-        extension = os.path.splitext(file_name)[1]
+        name,extension = os.path.splitext(file_name)[:2]
             
         if extension == '.tif': # load avi file
-            raise Exception('not implemented')
+    #            raise Exception('not implemented')  
+            np.clip(self,np.percentile(self,1),np.percentile(self,99.99999),self)          
+            minn,maxx = np.min(self),np.max(self)
+            data = 65536 * (self-minn)/(maxx-minn)
+            data = data.astype(np.int32)
+            imsave(file_name, self.astype(np.float32))
+            
         elif extension == '.npz':
             np.savez(file_name,input_arr=self, start_time=self.start_time,fr=self.fr,meta_data=self.meta_data,file_name=self.file_name)
-        elif extension == 'avi':
-            raise Exception('not implemented')
+            
+        elif extension == '.avi':
+            codec=cv2.cv.FOURCC('I','Y','U','V')
+            np.clip(self,np.percentile(self,1),np.percentile(self,99),self)
+            minn,maxx = np.min(self),np.max(self)
+            data = 255 * (self-minn)/(maxx-minn)
+            data = data.astype(np.uint8)
+            y,x = data[0].shape
+            vw = cv2.VideoWriter(file_name, codec, self.fr, (x,y), isColor=True)
+            for d in data:
+                vw.write(cv2.cvtColor(d, cv2.COLOR_GRAY2BGR))
+            vw.release()
+
         elif extension == '.mat':
             raise Exception('not implemented')
+            
+        elif extension == '.hdf5':            
+            with h5py.File(file_name, "w") as f:                                
+                dset=f.create_dataset("mov",data=np.asarray(self))
+                dset.attrs["fr"]=self.fr
+                dset.attrs["start_time"]=self.start_time
+                dset.attrs["file_name"]=self.file_name
+                dset.attrs["meta_data"]=cpk.dumps(self.meta_data)
+            # for the moment this is a hack, will try to make it better    
+            np.savez(name+'_meta.npz',meta_data=self.meta_data)
+                
+                                
         else:
             print extension
-            raise Exception('Extension Unknown')
+            raise Exception('Extension Unknown')     
+        
+    
     
                 
 
@@ -156,4 +189,7 @@ def concatenate(*args,**kwargs):
         
         return obj.__class__(np.concatenate(*args,**kwargs),**obj.__dict__)   
         
-        
+       
+
+
+

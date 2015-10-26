@@ -11,12 +11,17 @@ import sys
 import copy
 import pims
 import scipy.ndimage
+import scipy
+import sklearn
 import warnings
 import numpy as np
 from sklearn.decomposition import NMF,IncrementalPCA, FastICA
 from sklearn.cluster import KMeans
 from sklearn.metrics.pairwise import euclidean_distances
 import pylab as plt
+import h5py
+import cPickle as cpk
+
 try:
     plt.ion()
 except:
@@ -58,7 +63,7 @@ class movie(ts.timeseries):
 #    def __new__(cls, input_arr,fr=None,start_time=0,file_name=None, meta_data=None,**kwargs):        
     def __new__(cls, input_arr,**kwargs):   
         
-        if type(input_arr) is np.ndarray:            
+        if type(input_arr) is np.ndarray or  type(input_arr) is h5py._hl.dataset.Dataset:            
 #            kwargs['start_time']=start_time;
 #            kwargs['file_name']=file_name;
 #            kwargs['meta_data']=meta_data;
@@ -72,7 +77,7 @@ class movie(ts.timeseries):
                
 
     
-    def motion_correct(self, max_shift_w=5,max_shift_h=5, show_movie=False,template=None,method='opencv'):
+    def motion_correct(self, max_shift_w=5,max_shift_h=5, template=None, method='opencv'):
         """
         Performs motion corretion using the opencv matchtemplate function. At every iteration a template is built by taking the median of all frames and then used to align the other frames.
          
@@ -94,8 +99,9 @@ class movie(ts.timeseries):
         if np.percentile(self,1)<=0:
             raise ValueError('The movie must only contain positive values')
             
-        
-        self=np.asanyarray(self,dtype=np.float32)
+        if type(self[0,0,0]) is not np.float32:
+            warn('Casting the array to float 32')
+            self=np.asanyarray(self,dtype=np.float32)
                     
         n_frames_,h_i, w_i = self.shape
         
@@ -142,26 +148,26 @@ class movie(ts.timeseries):
              else:
                  sh_x_n = -(sh_x - ms_h)
                  sh_y_n = -(sh_y - ms_w)
-             if method == 'opencv':        
-                 M = np.float32([[1,0,sh_y_n],[0,1,sh_x_n]])
-                 self[i] = cv2.warpAffine(frame,M,(w_i,h_i),flags=cv2.INTER_CUBIC)
-             elif method == 'skimage':
-                 tform = AffineTransform(translation=(-sh_y_n,-sh_x_n))             
-                 self[i] = warp(frame, tform,preserve_range=True,order=3)
-                 
+            
+#             if not only_shifts:
+#                 if method == 'opencv':        
+#                     M = np.float32([[1,0,sh_y_n],[0,1,sh_x_n]])
+#                     self[i] = cv2.warpAffine(frame,M,(w_i,h_i),flags=interpolation)
+#                 elif method == 'skimage':
+#                     tform = AffineTransform(translation=(-sh_y_n,-sh_x_n))             
+#                     self[i] = warp(frame, tform,preserve_range=True,order=3)
+#                 if show_movie:        
+#                 fr = cv2.resize(self[i],None,fx=2, fy=2, interpolation = cv2.INTER_CUBIC)
+#                 cv2.imshow('frame',fr/255.0)
+#                 if cv2.waitKey(1) & 0xFF == ord('q'):
+#                     cv2.destroyAllWindows()
+#                     break     
 
              shifts.append([sh_x_n,sh_y_n]) 
              xcorrs.append([avg_corr])
              
-             if show_movie:        
-                 fr = cv2.resize(self[i],None,fx=2, fy=2, interpolation = cv2.INTER_CUBIC)
-                 cv2.imshow('frame',fr/255.0)
-                 if cv2.waitKey(1) & 0xFF == ord('q'):
-                     cv2.destroyAllWindows()
-                     break 
-                 
-        cv2.destroyAllWindows()
-        return (self,template,shifts,xcorrs)
+
+        return (shifts,xcorrs)
         
     def motion_correct_scikit(self, max_shift_w=5,max_shift_h=5, show_movie=False,template=None):
         """
@@ -265,7 +271,9 @@ class movie(ts.timeseries):
         shifts: array of tuples representing x and y shifts for each frame        
         interpolation: 'linear', 'cubic', 'nearest' or cvs.INTER_XXX
         """
-        self=np.asanyarray(self,dtype=np.float32)
+        if type(self[0,0,0]) is not np.float32:
+            warn('Casting the array to float 32')
+            self=np.asanyarray(self,dtype=np.float32)
         
         if interpolation == 'cubic':            
             interpolation=cv2.INTER_CUBIC
@@ -299,8 +307,6 @@ class movie(ts.timeseries):
              M = np.float32([[1,0,sh_y_n],[0,1,sh_x_n]])                 
              self[i] = cv2.warpAffine(frame,M,(w,h),flags=interpolation)
 
-
-
         return self
     
 
@@ -332,7 +338,7 @@ class movie(ts.timeseries):
             raise ValueError("All pixels must be positive")
 
         numFrames,linePerFrame,pixPerLine=np.shape(self)
-        downsampfact=int(secsWindow*self.fr);
+        downsampfact=int(secsWindow*1.*self.fr);
         elm_missing=int(np.ceil(numFrames*1.0/downsampfact)*downsampfact-numFrames)
         padbefore=int(np.floor(elm_missing/2.0))
         padafter=int(np.ceil(elm_missing/2.0))
@@ -464,12 +470,31 @@ class movie(ts.timeseries):
         
         return ind_frames  
 
-
+    
     def IPCA_denoise(self, components = 50, batch = 1000):
         _, _, clean_vectors = self.IPCA(components, batch)
         self = self.__class__(np.reshape(clean_vectors.T, np.shape(self)),**self.__dict__)
+        return self
                 
-        
+    def IPCA_io(self, n_components=50, fun='logcosh', max_iter=1000, tol=1e-20):
+        pca_comp=n_components;        
+        [T,d1,d2]=self.shape
+        M=np.reshape(self,(T,d1*d2))                
+        [U,S,V] = scipy.sparse.linalg.svds(M,pca_comp)
+        S=np.diag(S);
+#        whiteningMatrix = np.dot(scipy.linalg.inv(np.sqrt(S)),U.T)
+#        dewhiteningMatrix = np.dot(U,np.sqrt(S))
+        whiteningMatrix = np.dot(scipy.linalg.inv(S),U.T)
+        dewhiteningMatrix = np.dot(U,S)
+        whitesig =  np.dot(whiteningMatrix,M)
+        wsigmask=np.reshape(whitesig.T,(d1,d2,pca_comp));
+        f_ica=sklearn.decomposition.FastICA(whiten=False, fun=fun, max_iter=max_iter, tol=tol)
+        S_ = f_ica.fit_transform(whitesig.T)
+        A_ = f_ica.mixing_
+        A=np.dot(A_,whitesig)        
+        mask=np.reshape(A.T,(d1,d2,pca_comp))
+        return mask
+
     def compute_StructuredNMFactorization(self):
         print "to do"
         
@@ -647,15 +672,14 @@ class movie(ts.timeseries):
 def load(file_name,fr=None,start_time=0,meta_data=None,subindices=None):
     '''
     load movie from file
-    '''
+    '''  
     
     # case we load movie from file
     if os.path.exists(file_name):        
             
-        extension = os.path.splitext(file_name)[1]
+        name,extension = os.path.splitext(file_name)[:2]
 
         if extension == '.tif': # load avi file
-            #raise Exception('Use sintax mov=cb.load(filename)')
             
             with pims.open(file_name) as f:
                 if subindices is None:
@@ -695,12 +719,27 @@ def load(file_name,fr=None,start_time=0,meta_data=None,subindices=None):
             
         elif extension == '.npy': # load npy file     
             if subindices is not None:
-                raise Exception('Subindices not implemented')                        
-            input_arr=np.load(file_name)
+                input_arr=np.load(file_name)[subindices]     
+            else:                   
+                input_arr=np.load(file_name)
+            
         elif extension == '.npz': # load movie from saved file                          
             if subindices is not None:
                 raise Exception('Subindices not implemented')
-            return movie(**np.load(file_name))  
+            with np.load(file_name) as f:
+                return movie(**f)  
+            
+        elif extension== '.hdf5':
+            
+            with h5py.File(file_name, "r") as f:     
+                attrs=dict(f['mov'].attrs)
+                attrs['meta_data']=cpk.loads(attrs['meta_data'])
+                if subindices is None:
+#                    fr=f['fr'],start_time=f['start_time'],file_name=f['file_name']
+                    return movie(f['mov'],**attrs)   
+                else:
+                    return movie(f['mov'][subindices],**attrs)         
+
         else:
             raise Exception('Unknown file type')    
     else:

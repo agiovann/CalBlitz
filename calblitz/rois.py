@@ -15,7 +15,7 @@ import numpy as np
 
 
 #%%
-def extractROIsFromPCAICA(spcomps, numSTD=4, gaussiansigmax=2 , gaussiansigmay=2):
+def extractROIsFromPCAICA(spcomps, numSTD=4, gaussiansigmax=2 , gaussiansigmay=2,thresh=None):
     """
     Given the spatial components output of the IPCA_stICA function extract possible regions of interest
     The algorithm estimates the significance of a components by thresholding the components after gaussian smoothing
@@ -45,8 +45,10 @@ def extractROIsFromPCAICA(spcomps, numSTD=4, gaussiansigmax=2 , gaussiansigmay=2
         minCompValueNeg=np.median(comp)-numSTD*iqr/1.35;            
 
         # got both positive and negative large magnitude pixels
-        compabspos=comp*(comp>minCompValuePos)-comp*(comp<minCompValueNeg);
-
+        if thresh is None:
+            compabspos=comp*(comp>minCompValuePos)-comp*(comp<minCompValueNeg);
+        else:
+            compabspos=comp*(comp>thresh)-comp*(comp<-thresh);
 
         #height, width = compabs.shape
         labeledpos, n = label(compabspos>0, np.ones((3,3)))
