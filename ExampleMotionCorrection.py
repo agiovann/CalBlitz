@@ -16,7 +16,6 @@ import calblitz as cb
 import time
 import pylab as pl
 import numpy as np
-import json
 #% set basic ipython functionalities
 try: 
     pl.ion()
@@ -44,10 +43,10 @@ except:
 #type_='MLI'
 
 
-filename='k23_20150424_002_001.tif'
-frameRate=30;
-start_time=0;
-type_='Sue_Ann_AAV'
+#filename='k23_20150424_002_001.tif'
+#frameRate=30;
+#start_time=0;
+#type_='Sue_Ann_AAV'
 
 #filename='20150522_1_1_001.tif'
        
@@ -68,10 +67,10 @@ type_='Sue_Ann_AAV'
 #filename='img001.tif'
 #filename='img002.tif'
 
-#frameRate=30;
-#filename='M_FLUO_1.tif'
-#frameRate=15.62;
-#start_time=0;
+filename='M_FLUO.tif'
+frameRate=15.62;
+start_time=0;
+type_='granule'
 
 #%%
 filename_py=filename[:-4]+'.npz'
@@ -103,29 +102,43 @@ m.save(filename_hdf5)
 
 
 #%%
-m=cb.load(filename_py); 
+if False:   
+    m=cb.load(filename_py); 
 #%%
 m=cb.load(filename_hdf5); 
 #m=m.crop(crop_top=0,crop_bottom=1,crop_left=0,crop_right=0,crop_begin=0,crop_end=0);
-min_val_add=np.float32(np.percentile(m,.0001))
-#min_val_add=np.min(m)-100
+min_val_add=np.min(np.mean(m,axis=0))
+#min_val_add=np.min(m)-1# movies must be strictly positive!!
 m=m-min_val_add
 
 #%% concatenate movies (it will add to the original movie)
 # you have to create another movie new_mov=XMovie(...)
 if False:
     conc_mov=cb.concatenate([m,m])
+    
+#%% quick and dirt
+m=cb.load(filename_hdf5); 
+
+m,shifts,xcorrs,template=m.motion_correct(max_shift_w=5,max_shift_h=5, num_frames_template=None, template = None,method='opencv')
+    
 
 #%% motion correct for template purpose. Just use a subset to compute the template
-max_shift_h=10;
-max_shift_w=10;
 
-submov=m[::5,:]
+
+if type_ == 'granule':
+    submov=m[::1,:]
+    max_shift_h=5;
+    max_shift_w=5;
+else:
+    submov=m[::5,:]
+    max_shift_h=10;
+    max_shift_w=10;
+    
 templ=np.nanmedian(submov,axis=0); # create template with portion of movie
-shifts,xcorrs=submov.motion_correct(max_shift_w=max_shift_w, max_shift_h=max_shift_h, template=templ, method='opencv')  #
+shifts,xcorrs=submov.extract_shifts(max_shift_w=max_shift_w, max_shift_h=max_shift_h, template=templ, method='opencv')  #
 submov.apply_shifts(shifts,interpolation='cubic')
 template=(np.nanmedian(submov,axis=0))
-shifts,xcorrs=m.motion_correct(max_shift_w=max_shift_w, max_shift_h=max_shift_h, template=template, method='opencv')  #
+shifts,xcorrs=m.extract_shifts(max_shift_w=max_shift_w, max_shift_h=max_shift_h, template=template, method='opencv')  #
 m=m.apply_shifts(shifts,interpolation='cubic')
 template=(np.median(m,axis=0))
 #pl.subplot(1,2,1)
@@ -133,10 +146,15 @@ template=(np.median(m,axis=0))
 #pl.subplot(1,2,2)
 pl.imshow(template,cmap=pl.cm.gray)
 #%% now use the good template to correct
+
+max_shift_h=10;
+max_shift_w=10;
+
 m=cb.load(filename_hdf5);
 min_val_add=np.float32(np.percentile(m,.0001))
 m=m-min_val_add
-shifts,xcorrs=m.motion_correct(max_shift_w=max_shift_w, max_shift_h=max_shift_h, template=template, method='opencv')  #
+shifts,xcorrs=m.extract_shifts(max_shift_w=max_shift_w, max_shift_h=max_shift_h, template=template, method='opencv')  #
+
 if m.meta_data[0] is None:
     m.meta_data[0]=dict()
     
@@ -145,7 +163,10 @@ m.meta_data[0]['xcorrs']=xcorrs
 m.meta_data[0]['template']=template
 m.meta_data[0]['min_val_add']=min_val_add
 
-min_val_add
+
+    
+
+
 
 m.save(filename_hdf5)
 #%% visualize shifts
@@ -159,6 +180,11 @@ meta_data=m.meta_data[0];
 shifts,min_val_add,xcorrs=[meta_data[x] for x in ['shifts','min_val_add','xcorrs']]
 m=m.apply_shifts(shifts,interpolation='cubic')
 #%% crop borders created by motion correction
+if type_ == 'granule':
+    m[np.nonzero(np.max(np.abs(shifts),axis=1)>=5)[0]]=np.mean(m,axis=0)
+#    m[np.nonzero(np.max(np.abs(shifts),axis=1)>=5)[0]]=np.nan
+    shifts=np.clip(shifts,-5,5)
+    
 max_h,max_w= np.max(shifts,axis=0)
 min_h,min_w= np.min(shifts,axis=0)
 m=m.crop(crop_top=max_h,crop_bottom=-min_h+1,crop_left=max_w,crop_right=-min_w,crop_begin=0,crop_end=0)
