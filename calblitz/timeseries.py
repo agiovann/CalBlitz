@@ -19,7 +19,6 @@ import os
 import warnings
 import numpy as np
 import cv2
-import numpy as np
 import h5py
 import pylab as plt
 import cPickle as cpk
@@ -28,6 +27,11 @@ try:
 except:
     1;
 
+import tifffile    
+from tifffile import imsave 
+ 
+if tifffile.__version__ < '0.7.0':
+    raise Exception('You need libtiff version >= 0.7.0, run pip install tifffile --upgrade')
 
 #%%
 class timeseries(np.ndarray):
@@ -119,7 +123,7 @@ class timeseries(np.ndarray):
             
         if extension == '.tif': # load avi file
     #            raise Exception('not implemented')
-            from tifffile import imsave  
+            
             np.clip(self,np.percentile(self,1),np.percentile(self,99.99999),self)          
             minn,maxx = np.min(self),np.max(self)
             data = 65536 * (self-minn)/(maxx-minn)
