@@ -30,7 +30,7 @@ m=cb.load(filename, fr=frameRate,start_time=start_time);
 print 'motion correcting...'
 max_shift_h=10;
 max_shift_w=10;
-m=cb.load(filename_hdf5); 
+#m=cb.load(filename_hdf5); 
 m,shifts,xcorrs,template=m.motion_correct(max_shift_w=max_shift_w,max_shift_h=max_shift_h, num_frames_template=None, template = None,method='opencv')
 max_h,max_w= np.max(shifts,axis=0)
 min_h,min_w= np.min(shifts,axis=0)

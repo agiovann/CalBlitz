@@ -20,7 +20,6 @@ import warnings
 import numpy as np
 import cv2
 import numpy as np
-from tifffile import imsave  
 import h5py
 import pylab as plt
 import cPickle as cpk
@@ -119,7 +118,8 @@ class timeseries(np.ndarray):
         name,extension = os.path.splitext(file_name)[:2]
             
         if extension == '.tif': # load avi file
-    #            raise Exception('not implemented')  
+    #            raise Exception('not implemented')
+            from tifffile import imsave  
             np.clip(self,np.percentile(self,1),np.percentile(self,99.99999),self)          
             minn,maxx = np.min(self),np.max(self)
             data = 65536 * (self-minn)/(maxx-minn)
