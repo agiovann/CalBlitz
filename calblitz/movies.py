@@ -73,11 +73,39 @@ class movie(ts.timeseries):
         else:
             raise Exception('Input must be an ndarray, use load instead!')
         
-       
+    def motion_correct(self, max_shift_w=5,max_shift_h=5, num_frames_template=None, template=None,method='opencv'):
+        # adjust the movie so that valuse are non negative   
+        min_val=np.min(np.mean(self,axis=0))
+        self=self-min_val
+        
+        if template is None: 
+            if num_frames_template is None:
+                num_frames_template=10e7/(512*512)
+            
+            frames_to_skip=np.round(np.maximum(1,self.shape[0]/num_frames_template))
+            m=self.copy()
+            idx=np.random.randint(0,high=self.shape[0],size=(num_frames_template,))
+            submov=m[::frames_to_skip,:]
+            templ=np.nanmedian(submov,axis=0); # create template with portion of movie
+            shifts,xcorrs=submov.extract_shifts(max_shift_w=max_shift_w, max_shift_h=max_shift_h, template=templ, method=method)  #
+            submov.apply_shifts(shifts,interpolation='cubic')
+            template=(np.nanmedian(submov,axis=0))
+            shifts,xcorrs=m.extract_shifts(max_shift_w=max_shift_w, max_shift_h=max_shift_h, template=template, method=method)  #
+            m=m.apply_shifts(shifts,interpolation='cubic')
+            template=(np.median(m,axis=0))      
+            del m
+        
+        # now use the good template to correct        
+        shifts,xcorrs=self.extract_shifts(max_shift_w=max_shift_w, max_shift_h=max_shift_h, template=template, method=method)  #               
+        self=self.apply_shifts(shifts,interpolation='cubic')
+        self=self+min_val       
+        
+        return self,shifts,xcorrs,template
+
                
 
     
-    def motion_correct(self, max_shift_w=5,max_shift_h=5, template=None, method='opencv'):
+    def extract_shifts(self, max_shift_w=5,max_shift_h=5, template=None, method='opencv'):
         """
         Performs motion corretion using the opencv matchtemplate function. At every iteration a template is built by taking the median of all frames and then used to align the other frames.
          
@@ -96,11 +124,11 @@ class movie(ts.timeseries):
         xcorrs: cross correlation of the movies with the template
         """
         
-        if np.percentile(self,1)<=0:
-            raise ValueError('The movie must only contain positive values')
+        if np.min(np.mean(self,axis=0))<0:
+            warnings.warn('Pixels averages are too negative. Algorithm might not work.')
             
         if type(self[0,0,0]) is not np.float32:
-            warn('Casting the array to float 32')
+            warnings.warn('Casting the array to float 32')
             self=np.asanyarray(self,dtype=np.float32)
                     
         n_frames_,h_i, w_i = self.shape
@@ -272,7 +300,7 @@ class movie(ts.timeseries):
         interpolation: 'linear', 'cubic', 'nearest' or cvs.INTER_XXX
         """
         if type(self[0,0,0]) is not np.float32:
-            warn('Casting the array to float 32')
+            warnings.warn('Casting the array to float 32')
             self=np.asanyarray(self,dtype=np.float32)
         
         if interpolation == 'cubic':            
@@ -319,7 +347,7 @@ class movie(ts.timeseries):
         return self[crop_begin:t-crop_end,crop_top:h-crop_bottom,crop_left:w-crop_right]
         
         
-    def computeDFF(self,secsWindow=5,quantilMin=8,squared_F=True):
+    def computeDFF(self,secsWindow=5,quantilMin=8,method='only_baseline'):
         """ 
         compute the DFF of the movie
         In order to compute the baseline frames are binned according to the window length parameter
@@ -328,13 +356,14 @@ class movie(ts.timeseries):
         ----------
         secsWindow: length of the windows used to compute the quantile
         quantilMin : value of the quantile
+        method='only_baseline','delta_f_over_f','delta_f_over_sqrt_f'
 
         """
         
         print "computing minimum ..."; sys.stdout.flush()
         minmov=np.min(self)
         
-        if np.min(self)<=0:
+        if np.min(self)<=0 and method != 'only_baseline':
             raise ValueError("All pixels must be positive")
 
         numFrames,linePerFrame,pixPerLine=np.shape(self)
@@ -357,14 +386,18 @@ class movie(ts.timeseries):
         movBL=scipy.ndimage.zoom(np.array(movBL,dtype=np.float32),[downsampfact ,1, 1],order=0, mode='constant', cval=0.0, prefilter=False)
         
         #% compute DF/F
-        if squared_F:
+        if method == 'delta_f_over_sqrt_f':
             self=(self-movBL)/np.sqrt(movBL)
-        else:
+        elif method == 'delta_f_over_f':
             self=(self-movBL)/movBL
+        elif method  =='only_baseline':
+            self=(self-movBL)/movBL
+        else:
+            raise Exception('Unknown method')
             
         self=self[padbefore:len(movBL)-padafter,:,:]; 
         print 'Final Size Movie:' +  np.str(self.shape) 
-        return self         
+        return self,movie(movBL,fr=self.fr,start_time=self.start_time,meta_data=self.meta_data,file_name=self.file_name)      
         
     
     def NonnegativeMatrixFactorization(self,n_components=30, init='nndsvd', beta=1,tol=5e-7, sparseness='components',**kwargs):
@@ -426,7 +459,7 @@ class movie(ts.timeseries):
 
         return eigenseries, eigenframes, proj_frame_vectors    
     
-    def IPCA_stICA(self, components = 50, batch = 1000, mu = 1, ICAfun = 'logcosh'):
+    def IPCA_stICA(self, componentsPCA=50,componentsICA = 40, batch = 1000, mu = 1, ICAfun = 'logcosh', **kwargs):
         # Parameters:
         #   components (default 50)
         #     = number of independent components to return
@@ -438,12 +471,12 @@ class movie(ts.timeseries):
         #       higher mu puts more weight on spatial information
         #   ICAFun (default = 'logcosh')
         #     = cdf to use for ICA entropy maximization    
-        #
+        #   Plus all parameters from sklearn.decomposition.FastICA
         # Returns:
         #   ind_frames [components, height, width]
         #     = array of independent component "eigenframes"
     
-        eigenseries, eigenframes,_proj = self.IPCA(components, batch)
+        eigenseries, eigenframes,_proj = self.IPCA(componentsPCA, batch)
         # normalize the series
     
         frame_scale = mu / np.max(eigenframes)
@@ -459,14 +492,14 @@ class movie(ts.timeseries):
     
         eigenstuff = np.concatenate([n_eigenframes, n_eigenseries])
     
-        ica = FastICA(n_components=components, fun=ICAfun)
+        ica = FastICA(n_components=componentsICA, fun=ICAfun,**kwargs)
         joint_ics = ica.fit_transform(eigenstuff)
     
         # extract the independent frames
         num_frames, h, w = np.shape(self);
         frame_size = h * w;
         ind_frames = joint_ics[:frame_size, :]
-        ind_frames = np.reshape(ind_frames.T, (components, h, w))
+        ind_frames = np.reshape(ind_frames.T, (componentsICA, h, w))
         
         return ind_frames  
 
@@ -477,6 +510,10 @@ class movie(ts.timeseries):
         return self
                 
     def IPCA_io(self, n_components=50, fun='logcosh', max_iter=1000, tol=1e-20):
+        
+        
+        
+        
         pca_comp=n_components;        
         [T,d1,d2]=self.shape
         M=np.reshape(self,(T,d1*d2))                

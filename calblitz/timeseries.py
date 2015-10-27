@@ -151,8 +151,7 @@ class timeseries(np.ndarray):
                 dset.attrs["start_time"]=self.start_time
                 dset.attrs["file_name"]=self.file_name
                 dset.attrs["meta_data"]=cpk.dumps(self.meta_data)
-            # for the moment this is a hack, will try to make it better    
-            np.savez(name+'_meta.npz',meta_data=self.meta_data)
+            
                 
                                 
         else:
