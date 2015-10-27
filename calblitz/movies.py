@@ -724,8 +724,12 @@ def load(file_name,fr=None,start_time=0,meta_data=None,subindices=None):
                 else:
                     input_arr = np.array([f[j] for j in subindices])
             
-            # necessary for the way pims work with tiffs  
-            input_arr = np.swapaxes(input_arr,1,2)       
+            # ometimes ecessary for the way pims work with tiffs  
+            if input_arr.ndim>3:
+		input_arr=np.squeeze(input_arr)
+	    else:
+		warnings.warn('input vector seems to be 4D, squeezing, if input is actually 4D please contact developer')
+		input_arr = np.swapaxes(input_arr,1,2)       
             input_arr = input_arr[:,:,::-1]
 
         elif extension == '.avi': # load avi file
