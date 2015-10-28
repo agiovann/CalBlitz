@@ -1,8 +1,6 @@
 # CalBlitz
 **Blazing fast** calcium imaging analysis toolbox
 
-# PLEASE BE ADVISED THAT FOR THE NEXT FEW DAYS THE CODE IS UNDER RECONSTRUCTION. THIS MESSAGE WILL DISAPPEAR WHEN STABLE AGAIN. 
-
 ## Synopsis
 This projects implements a set of essential methods required in the calcium imaging movies analysis pipeline. **Fast and scalable algorithms** are implemented for motion correction, movie manipulation and roi segmentation. It is assumed that movies are collected with the scanimage data acquisition software and stored in *.tif* format. Find below a schematic of the calcium imaging pipeline:
 
