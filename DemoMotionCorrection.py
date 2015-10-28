@@ -3,13 +3,8 @@
 Created on Tue Jun 30 20:56:07 2015
 @author: agiovann
 """
-#%% add CalBlitz folder to python directory
-path_to_CalBlitz_folder='/home/ubuntu/SOFTWARE/CalBlitz'
-path_to_CalBlitz_folder='C:/Users/agiovann/Documents/SOFTWARE/CalBlitz/CalBlitz'
 
 import sys
-sys.path
-sys.path.append(path_to_CalBlitz_folder)
 #% add required packages
 import h5py
 import calblitz as cb
@@ -19,8 +14,8 @@ import numpy as np
 #% set basic ipython functionalities
 try: 
     pl.ion()
-    %load_ext autoreload
-    %autoreload 2
+    eval('%load_ext autoreload')
+    eval('%autoreload 2')
 except:
     print "Probably not a Ipython interactive environment" 
 
@@ -57,10 +52,13 @@ max_shift_h=10;
 max_shift_w=10;
 m=cb.load(filename_hdf5); 
 m,shifts,xcorrs,template=m.motion_correct(max_shift_w=max_shift_w,max_shift_h=max_shift_h, num_frames_template=None, template = None,method='opencv')
+#m,shifts,xcorrs,template=m.motion_correct(max_shift_w=max_shift_w,max_shift_h=max_shift_h, num_frames_template=None, template = None,method='skimage')
+
+
 max_h,max_w= np.max(shifts,axis=0)
 min_h,min_w= np.min(shifts,axis=0)
 m=m.crop(crop_top=max_h,crop_bottom=-min_h+1,crop_left=max_w,crop_right=-min_w,crop_begin=0,crop_end=0)
-np.savez(filename_mc,template=template,shifts=shifts,xcorrs=xcorrs,max_shift_h=max_shift_h,max_shift_w=max_shift_w,min_val_add=min_val_add)
+np.savez(filename_mc,template=template,shifts=shifts,xcorrs=xcorrs,max_shift_h=max_shift_h,max_shift_w=max_shift_w)
 
 
 pl.subplot(2,1,1)

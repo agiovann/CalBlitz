@@ -74,30 +74,52 @@ class movie(ts.timeseries):
             raise Exception('Input must be an ndarray, use load instead!')
         
     def motion_correct(self, max_shift_w=5,max_shift_h=5, num_frames_template=None, template=None,method='opencv'):
+        
+        '''
+        Extract shifts and motion corrected movie automatically, for more control consider the functions extract_shifts and apply_shifts   
+        Disclaimer, it might change the object itself.
+        
+        Parameters
+        ----------
+        max_shift_w,max_shift_h: maximum pixel shifts allowed when correcting in the width and height direction
+        template: if a good template for frame by frame correlation is available it can be passed. If None it is automatically computed
+        method: depends on what is installed 'opencv' or 'skimage'. 'skimage' is an order of magnitude slower
+        num_frames_template: if only a subset of the movies needs to be loaded for efficiency/speed reasons
+        
+         
+        Returns
+        -------
+        self: motion corected movie, it might change the object itself              
+        shifts : tuple, contains shifts in x and y and correlation with template
+        xcorrs: cross correlation of the movies with the template
+        template= the computed template
+
+        '''
+        
         # adjust the movie so that valuse are non negative   
         min_val=np.min(np.mean(self,axis=0))
         self=self-min_val
         
-        if template is None: 
+        if template is None:  # if template is not provided it is created
             if num_frames_template is None:
                 num_frames_template=10e7/(512*512)
             
-            frames_to_skip=np.round(np.maximum(1,self.shape[0]/num_frames_template))
+            frames_to_skip=np.round(np.maximum(1,self.shape[0]/num_frames_template)) # sometimes it is convenient to only consider a subset of the movie when computing the median
             m=self.copy()
             idx=np.random.randint(0,high=self.shape[0],size=(num_frames_template,))
             submov=m[::frames_to_skip,:]
             templ=np.nanmedian(submov,axis=0); # create template with portion of movie
             shifts,xcorrs=submov.extract_shifts(max_shift_w=max_shift_w, max_shift_h=max_shift_h, template=templ, method=method)  #
-            submov.apply_shifts(shifts,interpolation='cubic')
+            submov.apply_shifts(shifts,interpolation='cubic',method=method)
             template=(np.nanmedian(submov,axis=0))
             shifts,xcorrs=m.extract_shifts(max_shift_w=max_shift_w, max_shift_h=max_shift_h, template=template, method=method)  #
-            m=m.apply_shifts(shifts,interpolation='cubic')
+            m=m.apply_shifts(shifts,interpolation='cubic',method=method)
             template=(np.median(m,axis=0))      
             del m
         
         # now use the good template to correct        
         shifts,xcorrs=self.extract_shifts(max_shift_w=max_shift_w, max_shift_h=max_shift_h, template=template, method=method)  #               
-        self=self.apply_shifts(shifts,interpolation='cubic')
+        self=self.apply_shifts(shifts,interpolation='cubic',method=method)
         self=self+min_val       
         
         return self,shifts,xcorrs,template
@@ -111,15 +133,12 @@ class movie(ts.timeseries):
          
         Parameters
         ----------
-        max_shift: maximum pixel shifts allowed when correcting
-        show_movie : display the movie wile correcting it
-        template: the templates created at each iteration
-        method: depends on what is installed 'opencv' or 'skimage' 
+        max_shift_w,max_shift_h: maximum pixel shifts allowed when correcting in the width and height direction
+        template: if a good template for frame by frame correlation is available it can be passed. If None it is automatically computed
+        method: depends on what is installed 'opencv' or 'skimage'. 'skimage' is an order of magnitude slower
          
         Returns
         -------
-        movCorr: motion corected movie              
-        template
         shifts : tuple, contains shifts in x and y and correlation with template
         xcorrs: cross correlation of the movies with the template
         """
@@ -157,7 +176,8 @@ class movie(ts.timeseries):
                  res = match_template(frame,template)                 
                  top_left = np.unravel_index(np.argmax(res),res.shape);
                  top_left=top_left[::-1]   
-
+             else:
+                 raise Exception('Unknown motion correction ethod!')
              avg_corr=np.mean(res);
              sh_y,sh_x = top_left
              bottom_right = (top_left[0] + w, top_left[1] + h)
@@ -197,100 +217,11 @@ class movie(ts.timeseries):
 
         return (shifts,xcorrs)
         
-    def motion_correct_scikit(self, max_shift_w=5,max_shift_h=5, show_movie=False,template=None):
-        """
-        Performs motion corretion using the opencv matchtemplate function. At every iteration a template is built by taking the median of all frames and then used to align the other frames.
-         
-        Parameters
-        ----------
-        max_shift: maximum pixel shifts allowed when correcting
-        show_movie : display the movie wile correcting it
-         
-        Returns
-        -------
-        movCorr: motion corected movie              
-        shifts : tuple, contains shifts in x and y and correlation with template
-        template: the templates created at each iteration
-        """
-        
-        if np.percentile(self,1)<0:
-            raise ValueError('The movie must only contain positive values')
-            
-        
-        self=np.asanyarray(self,dtype=np.float32)
-        
-#        self=(self-np.min(self))/(np.max(self)-np.min(self))        
-            
-            
-        n_frames_,h_i, w_i = self.shape
-        
-        ms_w = max_shift_w
-        ms_h = max_shift_h
-        
-        if template is None:
-            template=np.median(self,axis=0)            
-            
-        template=template[ms_h:h_i-ms_h,ms_w:w_i-ms_w].astype(np.float32)    
-        h,w = template.shape      # template width and height
-        
-        
-        #% run algorithm, press q to stop it 
-        shifts=[];   # store the amount of shift in each frame
-        xcorrs=[];
-        
-        for i,frame in enumerate(self):
-             if i%100==99:
-                 print "Frame %i"%(i+1);
-             res = match_template(frame,template)
-             avg_corr=np.mean(res);
-             top_left = np.unravel_index(np.argmax(res),res.shape);
-             top_left=top_left[::-1]             
-             sh_y,sh_x = top_left
-             bottom_right = (top_left[0] + w, top_left[1] + h)
-        
-             if (0 < top_left[1] < 2 * ms_h-1) & (0 < top_left[0] < 2 * ms_w-1):
-                 # if max is internal, check for subpixel shift using gaussian
-                 # peak registration
-                 log_xm1_y = np.log(res[sh_x-1,sh_y]);             
-                 log_xp1_y = np.log(res[sh_x+1,sh_y]);             
-                 log_x_ym1 = np.log(res[sh_x,sh_y-1]);             
-                 log_x_yp1 = np.log(res[sh_x,sh_y+1]);             
-                 four_log_xy = 4*np.log(res[sh_x,sh_y]);
-    
-                 sh_x_n = -(sh_x - ms_h + (log_xm1_y - log_xp1_y) / (2 * log_xm1_y - four_log_xy + 2 * log_xp1_y))
-                 sh_y_n = -(sh_y - ms_w + (log_x_ym1 - log_x_yp1) / (2 * log_x_ym1 - four_log_xy + 2 * log_x_yp1))
-             else:
-                 sh_x_n = -(sh_x - ms_h)
-                 sh_y_n = -(sh_y - ms_w)
-                     
-#             M = np.float32([[1,0,sh_y_n],[0,1,sh_x_n]])
-#             tform = AffineTransform(matrix=M)
-             tform = AffineTransform(translation=(-sh_y_n,-sh_x_n))             
-             self[i] = warp(frame, tform,preserve_range=True,order=3)
-             
-#             M = np.float32([[1,0,sh_y_n],[0,1,sh_x_n]])
-#             self[i] = cv2.warpAffine(frame,M,(w_i,h_i),flags=cv2.INTER_CUBIC)
-
-             shifts.append([sh_x_n,sh_y_n]) 
-             xcorrs.append([avg_corr])
-             
-                         
-             
-             if show_movie:        
-                 fr = cv2.resize(self[i],None,fx=2, fy=2, interpolation = cv2.INTER_CUBIC)
-                 cv2.imshow('frame',fr/255.0)
-                 if cv2.waitKey(1) & 0xFF == ord('q'):
-                     cv2.destroyAllWindows()
-                     break 
-                 
-        cv2.destroyAllWindows()
-        return (self,template,shifts,xcorrs)
-        
         
 
         
         
-    def apply_shifts(self, shifts,interpolation='linear'):
+    def apply_shifts(self, shifts,interpolation='linear',method='opencv'):
         """ 
         Apply precomputed shifts to a movie, using subpixels adjustment (cv2.INTER_CUBIC function)
         
@@ -303,23 +234,38 @@ class movie(ts.timeseries):
             warnings.warn('Casting the array to float 32')
             self=np.asanyarray(self,dtype=np.float32)
         
-        if interpolation == 'cubic':            
-            interpolation=cv2.INTER_CUBIC
+        if interpolation == 'cubic':     
+            if method == 'opencv':
+                interpolation=cv2.INTER_CUBIC
+            else:
+                interpolation=3
             print 'cubic interpolation'
             
-        elif interpolation == 'nearest':            
-            interpolation=cv2.INTER_NEAREST 
+        elif interpolation == 'nearest':
+            if method == 'opencv':            
+                interpolation=cv2.INTER_NEAREST 
+            else:
+                interpolation=0
             print 'nearest interpolation'
             
-        elif interpolation == 'linear':            
-            interpolation=cv2.INTER_LINEAR
+        elif interpolation == 'linear':
+            if method=='opencv':            
+                interpolation=cv2.INTER_LINEAR
+            else:
+                interpolation=1
             print 'linear interpolation'
-        elif interpolation == 'area':            
-            interpolation=cv2.INTER_AREA
+        elif interpolation == 'area':   
+            if method=='opencv': 
+                interpolation=cv2.INTER_AREA
+            else:
+                raise Exception('Method not defined')
             print 'area interpolation'
-        elif interpolation == 'lanczos4':            
-            interpolation=cv2.INTER_LANCZOS4
-            print 'lanczos interpolation'            
+        elif interpolation == 'lanczos4': 
+            if method=='opencv': 
+                interpolation=cv2.INTER_LANCZOS4
+            else:
+                interpolation=4
+            print 'lanczos/biquartic interpolation'            
             
         else:
             raise Exception('Interpolation method not available')
@@ -332,8 +278,17 @@ class movie(ts.timeseries):
                  print "Frame %i"%(i+1); 
 
              sh_x_n, sh_y_n = shifts[i]
-             M = np.float32([[1,0,sh_y_n],[0,1,sh_x_n]])                 
-             self[i] = cv2.warpAffine(frame,M,(w,h),flags=interpolation)
+               
+             if method == 'opencv':
+                 M = np.float32([[1,0,sh_y_n],[0,1,sh_x_n]])
+                 self[i] = cv2.warpAffine(frame,M,(w,h),flags=interpolation)
+             elif method == 'skimage':
+                 
+                 tform = AffineTransform(translation=(-sh_y_n,-sh_x_n))             
+                 self[i] = warp(frame, tform,preserve_range=True,order=interpolation)
+                                                     
+             else:
+                 raise Exception('Unknown shift  application method')
 
         return self
     
@@ -349,7 +304,7 @@ class movie(ts.timeseries):
         
     def computeDFF(self,secsWindow=5,quantilMin=8,method='only_baseline'):
         """ 
-        compute the DFF of the movie
+        compute the DFF of the movie or remove baseline
         In order to compute the baseline frames are binned according to the window length parameter
         and then the intermediate values are interpolated. 
         Parameters
@@ -357,7 +312,11 @@ class movie(ts.timeseries):
         secsWindow: length of the windows used to compute the quantile
         quantilMin : value of the quantile
         method='only_baseline','delta_f_over_f','delta_f_over_sqrt_f'
-
+        
+        Returns 
+        -----------
+        self: DF or DF/F or DF/sqrt(F) movies
+        movBL=baseline movie
         """
         
         print "computing minimum ..."; sys.stdout.flush()
@@ -422,22 +381,24 @@ class movie(ts.timeseries):
         
     
     def IPCA(self, components = 50, batch =1000):
-
-        # Parameters:
-        #   components (default 50)
-        #     = number of independent components to return
-        #   batch (default 1000)
-        #     = number of pixels to load into memory simultaneously
-        #       in IPCA. More requires more memory but leads to better fit
-
-
+        '''
+        Iterative Principal Component analysis, see sklearn.decomposition.incremental_pca
+        Parameters:
+        ------------
+        components (default 50) = number of independent components to return
+        batch (default 1000)  = number of pixels to load into memory simultaneously in IPCA. More requires more memory but leads to better fit
+        Returns
+        -------
+        eigenseries: principal components (pixel time series) and associated singular values
+        eigenframes: eigenframes are obtained by multiplying the projected frame matrix by the projected movie (whitened frames?)
+        proj_frame_vectors:the reduced version of the movie vectors using only the principal component projection
+        '''
         # vectorize the images
         num_frames, h, w = np.shape(self);
         frame_size = h * w;
         frame_samples = np.reshape(self, (num_frames, frame_size)).T
         
-        # run IPCA to approxiate the SVD
-        
+        # run IPCA to approxiate the SVD        
         ipca_f = IncrementalPCA(n_components=components, batch_size=batch)
         ipca_f.fit(frame_samples)
         
@@ -460,22 +421,21 @@ class movie(ts.timeseries):
         return eigenseries, eigenframes, proj_frame_vectors    
     
     def IPCA_stICA(self, componentsPCA=50,componentsICA = 40, batch = 1000, mu = 1, ICAfun = 'logcosh', **kwargs):
-        # Parameters:
-        #   components (default 50)
-        #     = number of independent components to return
-        #   batch (default 1000)
-        #     = number of pixels to load into memory simultaneously
-        #       in IPCA. More requires more memory but leads to better fit
-        #   mu (default 0.05)
-        #     = parameter in range [0,1] for spatiotemporal ICA,
-        #       higher mu puts more weight on spatial information
-        #   ICAFun (default = 'logcosh')
-        #     = cdf to use for ICA entropy maximization    
-        #   Plus all parameters from sklearn.decomposition.FastICA
-        # Returns:
-        #   ind_frames [components, height, width]
-        #     = array of independent component "eigenframes"
-    
+        '''
+        Compute PCA + ICA a la Mukamel 2009. 
+        
+        
+        
+        Parameters:
+        components (default 50) = number of independent components to return
+        batch (default 1000) = number of pixels to load into memory simultaneously in IPCA. More requires more memory but leads to better fit
+        mu (default 0.05) = parameter in range [0,1] for spatiotemporal ICA, higher mu puts more weight on spatial information
+        ICAFun (default = 'logcosh') = cdf to use for ICA entropy maximization    
+        Plus all parameters from sklearn.decomposition.FastICA
+        
+        Returns:
+        ind_frames [components, height, width] = array of independent component "eigenframes"
+        '''
         eigenseries, eigenframes,_proj = self.IPCA(componentsPCA, batch)
         # normalize the series
     
@@ -505,15 +465,16 @@ class movie(ts.timeseries):
 
     
     def IPCA_denoise(self, components = 50, batch = 1000):
+        '''
+        Create a denoise version of the movie only using the first 'components' components
+        '''
         _, _, clean_vectors = self.IPCA(components, batch)
         self = self.__class__(np.reshape(clean_vectors.T, np.shape(self)),**self.__dict__)
         return self
                 
     def IPCA_io(self, n_components=50, fun='logcosh', max_iter=1000, tol=1e-20):
-        
-        
-        
-        
+        ''' DO NOT USE STILL UNDER DEVELOPMENT
+        '''
         pca_comp=n_components;        
         [T,d1,d2]=self.shape
         M=np.reshape(self,(T,d1*d2))                
@@ -537,9 +498,16 @@ class movie(ts.timeseries):
         
    
     def local_correlations(self,eight_neighbours=False):
-         # Output:
-         #   rho M x N matrix, cross-correlation with adjacent pixel
-         # if eight_neighbours=True it will take the diagonal neighbours too
+         '''
+         Compute local correlations.
+         Parameters:
+         -----------
+         if eight_neighbours=True it will take the diagonal neighbours too
+         
+         Returns
+         -------
+         rho M x N matrix, cross-correlation with adjacent pixel
+         '''
 
          rho = np.zeros(np.shape(self)[1:3])
          w_mov = (self - np.mean(self, axis = 0))/np.std(self, axis = 0)
@@ -630,11 +598,10 @@ class movie(ts.timeseries):
         Parameters
         ----------------------
         masks: array, 3D with each 2D slice bein a mask (integer or fractional)  
-        type_: extracted fluorescence trace, if 'DFF' it will also extract DFF
+        
         Outputs
         ----------------------
         traces: array, 2D of fluorescence traces
-        tracesDFF: rray, 2D of DF/F traces
         """
         T,h,w=self.shape
         Y=np.reshape(self,(T,h*w))
@@ -648,6 +615,7 @@ class movie(ts.timeseries):
     def resize(self,fx=1,fy=1,fz=1,interpolation=cv2.INTER_AREA):  
         """
         resize movies along axis and interpolate or lowpass when necessary
+        it will not work without opencv
         
         Parameters
         -------------------
@@ -708,7 +676,13 @@ class movie(ts.timeseries):
 
 def load(file_name,fr=None,start_time=0,meta_data=None,subindices=None):
     '''
-    load movie from file
+    load movie from file. 
+    
+    Parameters
+    -----------
+    file_name: name of file. Possible extensions are tif, avi, npy, (npz and hdf5 are usable only if saved by calblitz)
+    fr=None,start_time=0,meta_data=None, same as for calblitz.movie
+    subindices=None: iterable indexes, for loading only portion of the movie
     '''  
     
     # case we load movie from file

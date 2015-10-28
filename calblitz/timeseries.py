@@ -119,6 +119,14 @@ class timeseries(np.ndarray):
 #        return np.ndarray.__array_wrap__(self, out_arr, context)    
 #    
     def save(self,file_name):
+        '''
+        Save the timeseries in various formats
+        
+        parameters
+        ----------
+        file_name: name of file. Possible formats are tif, avi, npz and hdf5
+        
+        '''
         name,extension = os.path.splitext(file_name)[:2]
             
         if extension == '.tif': # load avi file
