@@ -156,9 +156,9 @@ cd CalBlitz/
 ## Tests
 type 
 
-'''
+```python
 python test_software.py
-'''
+```
 
 Add the CalBlitz folder to your Python path (or call the script from within the library). We suggest to use spyder to run the example code in *DemoMotionCorrection.py* or *DemoSegmentation.py. Each [code cell](https://pythonhosted.org/spyder/editor.html#how-to-define-a-code-cell) is a unit that should be run and the result inspected. This package is supposed to be used interactively, like in [MATLAB](http://www.mathworks.com).   
 
