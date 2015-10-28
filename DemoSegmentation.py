@@ -3,13 +3,6 @@
 Created on Tue Jun 30 20:56:07 2015
 @author: agiovann
 """
-#%% add CalBlitz folder to python directory
-path_to_CalBlitz_folder='/home/ubuntu/SOFTWARE/CalBlitz'
-path_to_CalBlitz_folder='C:/Users/agiovann/Documents/SOFTWARE/CalBlitz/CalBlitz'
-
-import sys
-sys.path
-sys.path.append(path_to_CalBlitz_folder)
 #% add required packages
 import h5py
 import calblitz as cb
