@@ -693,13 +693,20 @@ def load(file_name,fr=None,start_time=0,meta_data=None,subindices=None):
         if extension == '.tif': # load avi file
             
             with pims.open(file_name) as f:
-                for ext_fr in f:
-                    if subindices is None:
-                        input_arr = np.array(ext_fr)    
-                    else:
-                        input_arr = np.array([ext_fr[j] for j in subindices])
-            
-
+                if len(f.frame_shape)==3:
+                    for ext_fr in f:
+                        if subindices is None:
+                            input_arr = np.array(ext_fr)    
+                        else:
+                            input_arr = np.array([ext_fr[j] for j in subindices])
+                elif len(f.frame_shape)==2:                    
+                        if subindices is None:
+                            input_arr = np.array(f)    
+                        else:
+                            input_arr = np.array([f[j] for j in subindices])
+                else:
+                    raise Exception('The input file has an unknown numberof dimensions')
+                    
             # necessary for the way pims work with tiffs      
 #            input_arr = input_arr[:,::-1,:]
 
