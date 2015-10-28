@@ -46,7 +46,7 @@ m=m.crop(crop_top=max_h,crop_bottom=-min_h+1,crop_left=max_w,crop_right=-min_w,c
 
 #%% play movie
 print 'Playing movie, press q to stop...'
-m.play(fr=50,gain=3.0,magnification=1)
+#m.play(fr=50,gain=3.0,magnification=1)
 
 #%% resize to increase SNR and have better convergence of segmentation algorithms
 resizeMovie=False

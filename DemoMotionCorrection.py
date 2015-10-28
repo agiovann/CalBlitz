@@ -70,7 +70,7 @@ pl.ylabel('cross correlation')
 pl.xlabel('Frames')
 
 #%%
-m.play(fr=50,gain=5.0,magnification=1)   
+#m.play(fr=50,gain=5.0,magnification=1)   
 
 #%% IF YOU WANT MORE CONTROL USE THE FOLLOWING
 # motion correct for template purpose. Just use a subset to compute the template
@@ -132,7 +132,7 @@ m=m.crop(crop_top=max_h,crop_bottom=-min_h+1,crop_left=max_w,crop_right=-min_w,c
 
 
 #%% play movie
-m.play(fr=50,gain=3.0,magnification=1)
+#m.play(fr=50,gain=3.0,magnification=1)
 #%% visualize average
-meanMov=(np.mean(m,axis=0))
-pl.imshow(meanMov,cmap=pl.cm.gray,vmax=200)
+#meanMov=(np.mean(m,axis=0))
+#pl.imshow(meanMov,cmap=pl.cm.gray,vmax=200)
