@@ -195,7 +195,7 @@ export PATH=//anaconda/bin:$PATH
 ­ use pip to install pims: pip install pims
 ­ if pims causes kernel crash then use 
 
- ```
+ ``` python
  pip install pims ­­--upgrade
  ```
  
