@@ -10,12 +10,10 @@ import time
 import pylab as pl
 import numpy as np
 #% set basic ipython functionalities
-try: 
-    pl.ion()
-    eval('%load_ext autoreload')
-    eval('%autoreload 2')
-except:
-    print "Probably not a Ipython interactive environment" 
+#pl.ion()
+#%load_ext autoreload
+#%autoreload 2
+
 
 #%%
 filename='demoMovie.tif'
@@ -26,7 +24,7 @@ filename_py=filename[:-4]+'.npz'
 filename_hdf5=filename[:-4]+'.hdf5'
 filename_mc=filename[:-4]+'_mc.npz'
 
-#%% load and motion correct movie (see other Demo for more details
+#%% load and motion correct movie (see other Demo for more details)
 m=cb.load(filename, fr=frameRate,start_time=start_time);
 #%% automatic parameters motion correction
 max_shift_h=10;

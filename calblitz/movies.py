@@ -767,8 +767,12 @@ def load(file_name,fr=None,start_time=0,meta_data=None,subindices=None):
     return movie(input_arr,fr=fr,start_time=start_time,file_name=file_name, meta_data=meta_data)
           
         
-
-
+def load_movie_chain(file_list,fr=None,start_time=0,meta_data=None,subindices=None):
+    mov=[];    
+    for f in file_list:
+        mov.append(load(f,fr=fr,start_time=start_time,meta_data=meta_data,subindices=subindices))
+        
+    return ts.concatenate(mov,axis=0)
         
         
              

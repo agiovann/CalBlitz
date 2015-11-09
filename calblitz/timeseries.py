@@ -27,6 +27,8 @@ try:
 except:
     1;
 
+from scipy.io import loadmat,savemat
+
 import tifffile    
 from tifffile import imsave 
  
@@ -128,7 +130,8 @@ class timeseries(np.ndarray):
         
         '''
         name,extension = os.path.splitext(file_name)[:2]
-            
+        print extension
+        
         if extension == '.tif': # load avi file
     #            raise Exception('not implemented')
             
@@ -154,7 +157,11 @@ class timeseries(np.ndarray):
             vw.release()
 
         elif extension == '.mat':
-            raise Exception('not implemented')
+            if self.meta_data[0] is None:
+                savemat(file_name,{'input_arr':np.rollaxis(self,axis=0,start=3), 'start_time':self.start_time,'fr':self.fr,'meta_data':[],'file_name':self.file_name})
+            else:
+                savemat(file_name,{'input_arr':np.rollaxis(self,axis=0,start=3), 'start_time':self.start_time,'fr':self.fr,'meta_data':self.meta_data,'file_name':self.file_name})
+            
             
         elif extension == '.hdf5':            
             with h5py.File(file_name, "w") as f:                                
