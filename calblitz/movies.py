@@ -21,6 +21,7 @@ from sklearn.metrics.pairwise import euclidean_distances
 import pylab as plt
 import h5py
 import cPickle as cpk
+from scipy.io import loadmat
 
 try:
     plt.ion()
@@ -741,7 +742,14 @@ def load(file_name,fr=None,start_time=0,meta_data=None,subindices=None):
                 input_arr=np.load(file_name)[subindices]     
             else:                   
                 input_arr=np.load(file_name)
+                
+        elif extension == '.mat': # load npy file     
+            input_arr=loadmat(file_name)['data']
+            input_arr=np.rollaxis(input_arr,2,-3)
+            if subindices is not None:
+                input_arr=input_arr[subindices]     
             
+                
         elif extension == '.npz': # load movie from saved file                          
             if subindices is not None:
                 raise Exception('Subindices not implemented')
