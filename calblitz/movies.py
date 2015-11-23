@@ -716,10 +716,16 @@ def load(file_name,fr=None,start_time=0,meta_data=None,subindices=None):
             if subindices is not None:
                 raise Exception('Subindices not implemented')
             cap = cv2.VideoCapture(file_name)
-            length = int(cap.get(cv2.cv.CV_CAP_PROP_FRAME_COUNT))
-            width  = int(cap.get(cv2.cv.CV_CAP_PROP_FRAME_WIDTH))
-            height = int(cap.get(cv2.cv.CV_CAP_PROP_FRAME_HEIGHT))
-            
+            try: 
+                length = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+                width  = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+                height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+            except:
+                print 'Roll back top opencv 2'
+                length = int(cap.get(cv2.cv.CV_CAP_PROP_FRAME_COUNT))
+                width  = int(cap.get(cv2.cv.CV_CAP_PROP_FRAME_WIDTH))
+                height = int(cap.get(cv2.cv.CV_CAP_PROP_FRAME_HEIGHT))
+                
             input_arr=np.zeros((length, height,width),dtype=np.uint8)
             counter=0
             ret=True
