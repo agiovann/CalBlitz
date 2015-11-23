@@ -2,9 +2,11 @@
 **Blazing fast** calcium imaging analysis toolbox
 
 ## Synopsis
-This projects implements a set of essential methods required in the calcium imaging movies analysis pipeline. **Fast and scalable algorithms** are implemented for motion correction, movie manipulation and roi segmentation. It is assumed that movies are collected with the scanimage data acquisition software and stored in *.tif* format. Find below a schematic of the calcium imaging pipeline:
+
+Recent advances in calcium imaging acquisition techniques are creating datasets of the order of Terabytes/week. Memory and computationally efficient algorithms are required to analyze in reasonable amount of time terabytes of data. This projects implements a set of essential methods required in the calcium imaging movies analysis pipeline. **Fast and scalable algorithms** are implemented for motion correction, movie manipulation and roi segmentation. It is assumed that movies are collected with the scanimage data acquisition software and stored in *.tif* format. Find below a schematic of the calcium imaging pipeline:
 
 ![Alt text](images/CaImagingPipeline.png?raw=true "calcium imaging pipeline")
+
 
 ## Example Code
 
@@ -117,13 +119,11 @@ cb.matrixMontage(np.asarray(all_masksForPlot_tmp),cmap=pl.cm.gray)
 ```
 
 
-## Motivation
-
-Recent advances in calcium imaging acquisition techniques are creating datasets of the order of Terabytes/week. Memory and computationally efficient algorithms are required to analyze in reasonable amount of time terabytes of data.  
-
 ## Installation
 
 ###Prerequisites
+
+LINUX 
 
 install anaconda python distribution, then in your terminal type
 
@@ -134,10 +134,51 @@ conda install pip
 conda install scikit-learn (or pip install scikit-learn)
 conda install scikit-image
 pip install pims
-conda install opencv #(this will not work on windows, you need workarounds )
+conda install opencv 
+pip install tifffile
+```
+
+MAC OS X 
+
+install anaconda python distribution, then in your terminal type
+
+```
+conda create --name calblitz python matplotlib scipy ipython h5py 
+source activate calblitz
+conda install pip
+conda install scikit-learn (or pip install scikit-learn)
+conda install scikit-image
+pip install pims
+pip install tifffile
+
+#IF YOU DO NOT NEED TO READ AVI FILES 
+conda install opencv
+
+#IF YOU NEED TO READ AVIs
+Install homebrew[http://brew.sh]
+
+brew doctor
+brew tap homebrew/science
+brew install opencv3 --with-contrib  --with-ffmpeg 
+
+```
+
+WINDOWS
+
+install anaconda python distribution, then in your terminal type
+
+```
+conda create --name calblitz python matplotlib scipy ipython h5py 
+source activate calblitz
+conda install pip
+conda install scikit-learn (or pip install scikit-learn)
+conda install scikit-image
+pip install pims
 pip install tifffile
 
 ```
+you need to manually install opencv (pain in the neck)
+
 For opencv windows installation check [here]( 
 http://opencv-python-tutroals.readthedocs.org/en/latest/py_tutorials/py_setup/py_setup_in_windows/py_setup_in_windows.html)
 
