@@ -14,8 +14,8 @@ import numpy as np
 #% set basic ipython functionalities
 try: 
     pl.ion()
-    eval('%load_ext autoreload')
-    eval('%autoreload 2')
+    %load_ext autoreload
+    %autoreload 2
 except:
     print "Probably not a Ipython interactive environment" 
 

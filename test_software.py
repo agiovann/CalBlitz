@@ -24,6 +24,7 @@ filename_hdf5=filename[:-4]+'.hdf5'
 filename_mc=filename[:-4]+'_mc.npz'
 
 #%% load movie
+
 print 'loading movie...'
 m=cb.load(filename, fr=frameRate,start_time=start_time);
 

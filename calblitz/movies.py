@@ -648,6 +648,9 @@ class movie(ts.timeseries):
         
       
     
+    def resample(self,new_time_vect):
+        print 1        
+    
     
     def play(self,gain=1,fr=None,magnification=1,offset=0,interpolation=cv2.INTER_LINEAR):
          """
@@ -672,7 +675,7 @@ class movie(ts.timeseries):
                 break  
          cv2.destroyAllWindows()       
         
-
+        
     
 
 def load(file_name,fr=None,start_time=0,meta_data=None,subindices=None):
@@ -781,10 +784,19 @@ def load(file_name,fr=None,start_time=0,meta_data=None,subindices=None):
     return movie(input_arr,fr=fr,start_time=start_time,file_name=file_name, meta_data=meta_data)
           
         
-def load_movie_chain(file_list,fr=None,start_time=0,meta_data=None,subindices=None):
+def load_movie_chain(file_list,fr=None,start_time=0,meta_data=None,subindices=None,bottom=0,top=0,left=0,right=0):
+    ''' load movies from list of file names
+    file_list: list of file names in string format
+    other parameters as in load_movie except
+    bottom, top, left, right to load only portion of the field of view
+    '''
+
     mov=[];    
     for f in file_list:
-        mov.append(load(f,fr=fr,start_time=start_time,meta_data=meta_data,subindices=subindices))
+        m=load(f,fr=fr,start_time=start_time,meta_data=meta_data,subindices=subindices);
+        tm,h,w=np.shape(m)
+        m=m[:,top:h-bottom,left:w-right]
+        mov.append(m)
         
     return ts.concatenate(mov,axis=0)
         
