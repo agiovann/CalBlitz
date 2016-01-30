@@ -22,6 +22,7 @@ import pylab as plt
 import h5py
 import cPickle as cpk
 from scipy.io import loadmat
+from matplotlib import animation
 
 try:
     plt.ion()
@@ -35,7 +36,7 @@ from skimage import data
 
 import timeseries as ts
 from traces import trace
-
+from utils import display_animation
 
 
 #%%
@@ -678,10 +679,27 @@ class movie(ts.timeseries):
             im.axes.figure.canvas.draw()
             plt.pause(1)
          
+         if backend is 'notebook':
+             # First set up the figure, the axis, and the plot element we want to animate
+            fig = plt.figure()
+            im = plt.imshow(self[0],interpolation='None',cmap=plt.cm.gray)
+            plt.axis('off')
+            def animate(i):
+                im.set_data(self[i])
+                return im,
+            
+            # call the animator.  blit=True means only re-draw the parts that have changed.
+            anim = animation.FuncAnimation(fig, animate, 
+                                           frames=self.shape[0], interval=1, blit=True)
+            
+            # call our new function to display the animation
+            return display_animation(anim,fps=fr)
+
+         
          if fr==None:
             fr=self.fr
             
-         for frame in self:
+         for iddxx,frame in enumerate(self):
             if backend is 'opencv':
                 if magnification != 1:
                     frame = cv2.resize(frame,None,fx=magnification, fy=magnification, interpolation = interpolation)
@@ -690,18 +708,31 @@ class movie(ts.timeseries):
                 if cv2.waitKey(int(1./fr*1000)) & 0xFF == ord('q'):
                     cv2.destroyAllWindows()
                     break  
-                cv2.destroyAllWindows()   
+                   
                 
             elif backend is 'pylab':
 
                 im.set_data((offset+frame)*gain/maxmov)
+                ax.set_title( str( iddxx ) )
+                plt.axis('off')
                 fig.canvas.draw()
-                plt.pause(.00001)                
+                plt.pause(1./fr*.5) 
+                ev=plt.waitforbuttonpress(1./fr*.5)
+                if ev is not None:                                    
+                    plt.close()
+                    break
                 
+            elif backend is 'notebook':
+
+                print 'Animated via MP4'
+                break
+
             else:
                 
                 raise Exception('Unknown backend!')
         
+         if backend is 'opencv':
+            cv2.destroyAllWindows()
         
     
 

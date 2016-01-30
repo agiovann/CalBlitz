@@ -42,7 +42,7 @@ m=cb.load(filename, fr=frameRate,start_time=start_time);
 #%% save movie hdf5 format. fastest
 m.save(filename_hdf5)
 #%%
-
+m.play(fr=100,gain=5.0,magnification=1,backend='pylab')
 
 #%% concatenate movies (it will add to the original movie)
 #conc_mov=cb.concatenate([m,m])

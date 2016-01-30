@@ -12,6 +12,9 @@ import scipy.ndimage
 import warnings
 import numpy as np
 from pylab import plt
+from tempfile import NamedTemporaryFile
+from IPython.display import HTML
+
 #%%
 def playMatrix(mov,gain=1.0,frate=.033):
     for frame in mov: 
@@ -85,4 +88,23 @@ if False:
     oness=np.ones((T));
     sqthr=np.sqrt(thr);
     #y(y<(mean(y(:)-3*std(y(:)))))=0;
+#%%
 
+VIDEO_TAG = """<video controls>
+ <source src="data:video/x-m4v;base64,{0}" type="video/mp4">
+ Your browser does not support the video tag.
+</video>"""
+
+def anim_to_html(anim,fps=20):
+    if not hasattr(anim, '_encoded_video'):
+        with NamedTemporaryFile(suffix='.mp4') as f:
+            anim.save(f.name, fps=fps, extra_args=['-vcodec', 'libx264'])
+            video = open(f.name, "rb").read()
+        anim._encoded_video = video.encode("base64")
+    
+    return VIDEO_TAG.format(anim._encoded_video)
+    
+
+def display_animation(anim,fps=20):
+    plt.close(anim._fig)
+    return HTML(anim_to_html(anim,fps=fps))    
