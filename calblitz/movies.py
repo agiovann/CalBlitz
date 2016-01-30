@@ -652,7 +652,7 @@ class movie(ts.timeseries):
         print 1        
     
     
-    def play(self,gain=1,fr=None,magnification=1,offset=0,interpolation=cv2.INTER_LINEAR):
+    def play(self,gain=1,fr=None,magnification=1,offset=0,interpolation=cv2.INTER_LINEAR,backend='pylab'):
          """
          Play the movie using opencv
          
@@ -660,20 +660,47 @@ class movie(ts.timeseries):
          ----------
          gain: adjust  movie brightness
          frate : playing speed if different from original (inter frame interval in seconds)
+         backend: 'pylab' or 'opencv', the latter much faster
          """  
+         if backend is 'pylab':
+             print '*** WARNING *** SPEED MIGHT BE LOW. USE opencv backend if available'
+         
          gain*=1.
          maxmov=np.max(self)
+         
+         if backend is 'pylab':
+            plt.ion()
+            fig = plt.figure( 1 )
+            ax = fig.add_subplot( 111 )
+            ax.set_title("Play Movie")                
+            im = ax.imshow( (offset+self[0])*gain/maxmov ,cmap=plt.cm.gray,vmin=0,vmax=1,interpolation='none') # Blank starting image
+            fig.show()
+            im.axes.figure.canvas.draw()
+            plt.pause(1)
+         
          if fr==None:
             fr=self.fr
+            
          for frame in self:
-            if magnification != 1:
-                frame = cv2.resize(frame,None,fx=magnification, fy=magnification, interpolation = interpolation)
+            if backend is 'opencv':
+                if magnification != 1:
+                    frame = cv2.resize(frame,None,fx=magnification, fy=magnification, interpolation = interpolation)
+                    
+                cv2.imshow('frame',(offset+frame)*gain/maxmov)
+                if cv2.waitKey(int(1./fr*1000)) & 0xFF == ord('q'):
+                    cv2.destroyAllWindows()
+                    break  
+                cv2.destroyAllWindows()   
                 
-            cv2.imshow('frame',(offset+frame)*gain/maxmov)
-            if cv2.waitKey(int(1./fr*1000)) & 0xFF == ord('q'):
-                cv2.destroyAllWindows()
-                break  
-         cv2.destroyAllWindows()       
+            elif backend is 'pylab':
+
+                im.set_data((offset+frame)*gain/maxmov)
+                fig.canvas.draw()
+                plt.pause(.00001)                
+                
+            else:
+                
+                raise Exception('Unknown backend!')
         
         
     
