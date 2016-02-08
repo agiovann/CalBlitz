@@ -116,7 +116,7 @@ class movie(ts.timeseries):
             template=bin_median(submov)
             shifts,xcorrs=m.extract_shifts(max_shift_w=max_shift_w, max_shift_h=max_shift_h, template=template, method=method)  #
             m=m.apply_shifts(shifts,interpolation='cubic',method=method)
-            template=(bon_median(m))      
+            template=(bin_median(m))      
             del m
         
         # now use the good template to correct        
