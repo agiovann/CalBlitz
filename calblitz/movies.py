@@ -110,13 +110,13 @@ class movie(ts.timeseries):
             m=self.copy()
             idx=np.random.randint(0,high=self.shape[0],size=(num_frames_template,))
             submov=m[::frames_to_skip,:]
-            templ=np.nanmedian(submov,axis=0); # create template with portion of movie
+            templ=bin_median(submov); # create template with portion of movie
             shifts,xcorrs=submov.extract_shifts(max_shift_w=max_shift_w, max_shift_h=max_shift_h, template=templ, method=method)  #
             submov.apply_shifts(shifts,interpolation='cubic',method=method)
-            template=(np.nanmedian(submov,axis=0))
+            template=bin_median(submov)
             shifts,xcorrs=m.extract_shifts(max_shift_w=max_shift_w, max_shift_h=max_shift_h, template=template, method=method)  #
             m=m.apply_shifts(shifts,interpolation='cubic',method=method)
-            template=(np.median(m,axis=0))      
+            template=(bon_median(m))      
             del m
         
         # now use the good template to correct        
@@ -127,7 +127,12 @@ class movie(ts.timeseries):
         return self,shifts,xcorrs,template
 
                
-
+    def bin_median(self,window=10):
+        T,d1,d2=np.shape(self)
+        num_windows=np.int(T/window)
+        num_frames=num_windows*window
+        return np.median(np.mean(np.reshape(m[:num_frames],(window,num_windows,d1,d2)),axis=0),axis=0)
+        
     
     def extract_shifts(self, max_shift_w=5,max_shift_h=5, template=None, method='opencv'):
         """
