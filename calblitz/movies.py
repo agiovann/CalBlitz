@@ -36,8 +36,7 @@ from skimage import data
 
 import timeseries as ts
 from traces import trace
-from utils import display_animation
-
+from utils import display_animation    
 
 #%%
 class movie(ts.timeseries):
@@ -74,7 +73,8 @@ class movie(ts.timeseries):
             
         else:
             raise Exception('Input must be an ndarray, use load instead!')
-        
+    
+    
     def motion_correct(self, max_shift_w=5,max_shift_h=5, num_frames_template=None, template=None,method='opencv'):
         
         '''
@@ -863,18 +863,23 @@ def load_movie_chain(file_list,fr=None,start_time=0,meta_data=None,subindices=No
         
     return ts.concatenate(mov,axis=0)
         
+
+
+
+
         
              
 if __name__ == "__main__":
-    mov=movie('/Users/agiovann/Dropbox/Preanalyzed Data/ExamplesDataAnalysis/Andrea/PC1/M_FLUO.tif',fr=15.62,start_time=0,meta_data={'zoom':2,'location':[100, 200, 300]})
-    mov1=movie('/Users/agiovann/Dropbox/Preanalyzed Data/ExamplesDataAnalysis/Andrea/PC1/M_FLUO.tif',fr=15.62,start_time=0,meta_data={'zoom':2,'location':[100, 200, 300]})    
-#    newmov=ts.concatenate([mov,mov1])    
-#    mov.save('./test.npz')
-#    mov=movie.load('test.npz')
-    max_shift=5;
-    mov,template,shifts,xcorrs=mov.motion_correct(max_shift_h=max_shift,max_shift_w=max_shift,show_movie=0)
-    max_shift=5;
-    mov1,template1,shifts1,xcorrs1=mov1.motion_correct(max_shift_h=max_shift,max_shift_w=max_shift,show_movie=0,method='skimage')
+    print 1
+#    mov=movie('/Users/agiovann/Dropbox/Preanalyzed Data/ExamplesDataAnalysis/Andrea/PC1/M_FLUO.tif',fr=15.62,start_time=0,meta_data={'zoom':2,'location':[100, 200, 300]})
+#    mov1=movie('/Users/agiovann/Dropbox/Preanalyzed Data/ExamplesDataAnalysis/Andrea/PC1/M_FLUO.tif',fr=15.62,start_time=0,meta_data={'zoom':2,'location':[100, 200, 300]})    
+##    newmov=ts.concatenate([mov,mov1])    
+##    mov.save('./test.npz')
+##    mov=movie.load('test.npz')
+#    max_shift=5;
+#    mov,template,shifts,xcorrs=mov.motion_correct(max_shift_h=max_shift,max_shift_w=max_shift,show_movie=0)
+#    max_shift=5;
+#    mov1,template1,shifts1,xcorrs1=mov1.motion_correct(max_shift_h=max_shift,max_shift_w=max_shift,show_movie=0,method='skimage')
     
 #    mov=mov.apply_shifts(shifts)    
 #    mov=mov.crop(crop_top=max_shift,crop_bottom=max_shift,crop_left=max_shift,crop_right=max_shift)    

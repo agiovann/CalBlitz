@@ -14,7 +14,9 @@ import numpy as np
 from pylab import plt
 from tempfile import NamedTemporaryFile
 from IPython.display import HTML
-
+import calblitz as cb
+import numpy as np
+from ipyparallel import Client
 #%%
 def playMatrix(mov,gain=1.0,frate=.033):
     for frame in mov: 
@@ -108,3 +110,62 @@ def anim_to_html(anim,fps=20):
 def display_animation(anim,fps=20):
     plt.close(anim._fig)
     return HTML(anim_to_html(anim,fps=fps))    
+
+#%%
+def motion_correct_parallel(file_names,fr,template=None,margins_out=0,max_shift_w=5, max_shift_h=5,remove_blanks=False):
+    """motion correct many movies usingthe ipyparallel cluster
+    Parameters
+    ----------
+    file_names: list of strings
+        names of he files to be motion corrected
+    fr: double
+        fr parameters for calcblitz movie 
+    margins_out: int
+        number of pixels to remove from the borders    
+    
+    Return
+    ------
+    base file names of the motion corrected files
+    """
+    args_in=[];
+    for f in file_names:
+        args_in.append((f,fr,margins_out,template,max_shift_w, max_shift_h,remove_blanks))
+        
+    try:
+        if 1:
+            c = Client()   
+            dview=c[:]
+            file_res = dview.map_sync(process_movie_parallel, args_in)                         
+        else:
+            file_res = map(process_movie_parallel, args_in)                         
+    finally:
+        dview.results.clear()   
+        c.purge_results('all')
+        c.purge_everything()
+        c.close()
+        
+            
+    return file_res
+
+
+    
+def process_movie_parallel(arg_in):
+#    import calblitz
+#    import calblitz.movies
+    import calblitz as cb
+    import numpy as np
+    fname,fr,margins_out,template,max_shift_w, max_shift_h,remove_blanks=arg_in
+    Yr=cb.load(fname,fr=fr)
+    Yr=Yr-np.percentile(Yr,1)     # needed to remove baseline
+    Yr=Yr[:,margins_out:-margins_out,margins_out:-margins_out] # borders create troubles
+    Yr,shifts,xcorrs,template=Yr.motion_correct(max_shift_w=max_shift_w, max_shift_h=max_shift_h,  method='opencv',template=template) 
+    template=Yr.bin_median()
+    if remove_blanks:    
+        max_h,max_w= np.max(shifts,axis=0)
+        min_h,min_w= np.min(shifts,axis=0)
+        Yr=Yr.crop(crop_top=max_h,crop_bottom=-min_h+1,crop_left=max_w,crop_right=-min_w,crop_begin=0,crop_end=0)
+
+    Yr.save(fname[:-3]+'hdf5')        
+
+    np.savez(fname[:-3]+'npz',shifts=shifts,xcorrs=xcorrs,template=template)
+    return fname[:-3]        
