@@ -152,8 +152,10 @@ def motion_correct_parallel(file_names,fr,template=None,margins_out=0,max_shift_
 def process_movie_parallel(arg_in):
 #    import calblitz
 #    import calblitz.movies
+    import ca_source_extraction as cse
     import calblitz as cb
     import numpy as np
+    
     fname,fr,margins_out,template,max_shift_w, max_shift_h,remove_blanks=arg_in
     Yr=cb.load(fname,fr=fr)
     Yr=Yr-np.percentile(Yr,1)     # needed to remove baseline
