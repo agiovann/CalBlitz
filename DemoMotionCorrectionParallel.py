@@ -62,7 +62,7 @@ for f in  file_res:
         pl.subplot(1,2,2)
         pl.plot(fl['shifts'])       
         all_movs.append(fl['template'][np.newaxis,:,:])
-        pl.pause(1)
+        pl.pause(.1)
         pl.cla()
         
 all_movs=cb.movie(np.concatenate(all_movs,axis=0),fr=10)
