@@ -657,6 +657,35 @@ class movie(ts.timeseries):
     def resample(self,new_time_vect):
         print 1        
     
+    def to_2D(self,order='F'):
+        [T,d1,d2]=self.shape
+        d=d1*d2
+        return np.reshape(self,(T,d),order=order)
+    
+    def zproject(self,method='mean',cmap=pl.cm.gray,aspect='auto',**kwargs):
+        """                                                                                                                                                                                       
+        Compute and plot projection across time:                                                                                                                                                  
+                                                                                                                                                                                                  
+        method: String                                                                                                                                                                            
+            'mean','median','std'                                                                                                                                                                 
+                                                                                                                                                                                                  
+        **kwargs: dict                                                                                                                                                                            
+            arguments to imagesc                                                                                                                                                                  
+        """
+        if method is 'mean':
+            zp=np.mean(self,axis=0)
+        elif method is 'median':
+            zp=np.median(self,axis=0)
+        elif method is 'std':
+            zp=np.std(self,axis=0)
+        else:
+            raise Exception('Method not implemented')
+        pl.imshow(zp,**kwargs)
+        return zp
+        
+    def local_correlations_movie(self,window=10):
+        [T,d1,d2]=self.shape
+        return movie(np.concatenate([self[j:j+window,:,:].local_correlations(eight_neighbours=True)[np.newaxis,:,:] for j in range(T-window)],axis=0),fr=self.fr)    
     
     def play(self,gain=1,fr=None,magnification=1,offset=0,interpolation=cv2.INTER_LINEAR,backend='pylab'):
          """
@@ -865,7 +894,11 @@ def load_movie_chain(file_list,fr=None,start_time=0,meta_data=None,subindices=No
         
 
 
-
+def to_3D(mov2D,shape,order='F'):
+    """
+    transform to 3D a vectorized movie
+    """
+	return np.reshape(mov2D,shape,order=order) 
 
         
              
