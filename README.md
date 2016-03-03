@@ -163,6 +163,13 @@ brew install opencv3 --with-contrib  --with-ffmpeg
 
 ```
 
+alternative way to install opencv 
+
+```
+conda create -n opencv numpy scipy scikit-learn matplotlib python=3
+conda install -c https://conda.binstar.org/menpo opencv3
+```
+
 WINDOWS
 
 install anaconda python distribution, then in your terminal type
@@ -178,6 +185,9 @@ pip install tifffile
 
 ```
 you need to manually install opencv (pain in the neck)
+
+
+
 
 For opencv windows installation check [here]( 
 http://opencv-python-tutroals.readthedocs.org/en/latest/py_tutorials/py_setup/py_setup_in_windows/py_setup_in_windows.html)
