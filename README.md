@@ -166,7 +166,7 @@ brew install opencv3 --with-contrib  --with-ffmpeg
 alternative way to install opencv 
 
 ```
-conda create -n opencv numpy scipy scikit-learn matplotlib python=3
+conda install numpy scipy scikit-learn matplotlib python=3
 conda install -c https://conda.binstar.org/menpo opencv3
 ```
 
