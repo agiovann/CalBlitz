@@ -112,7 +112,7 @@ def display_animation(anim,fps=20):
     return HTML(anim_to_html(anim,fps=fps))    
 
 #%%
-def motion_correct_parallel(file_names,fr,template=None,margins_out=0,max_shift_w=5, max_shift_h=5,remove_blanks=False):
+def motion_correct_parallel(file_names,fr,template=None,margins_out=0,max_shift_w=5, max_shift_h=5,remove_blanks=False,backend='single_thread'):
     """motion correct many movies usingthe ipyparallel cluster
     Parameters
     ----------
@@ -132,17 +132,20 @@ def motion_correct_parallel(file_names,fr,template=None,margins_out=0,max_shift_
         args_in.append((f,fr,margins_out,template,max_shift_w, max_shift_h,remove_blanks))
         
     try:
-        if 1:
+        if backend is 'ipyparallel':
             c = Client()   
             dview=c[:]
             file_res = dview.map_sync(process_movie_parallel, args_in)                         
-        else:
+        elif backend is 'single_thread':
             file_res = map(process_movie_parallel, args_in)                         
+        else:
+            raise Exception('Unknown backend')
     finally:
-        dview.results.clear()   
-        c.purge_results('all')
-        c.purge_everything()
-        c.close()
+        if backend is 'ipyparallel':
+            dview.results.clear()       
+            c.purge_results('all')
+            c.purge_everything()
+            c.close()
         
             
     return file_res
@@ -159,7 +162,8 @@ def process_movie_parallel(arg_in):
     fname,fr,margins_out,template,max_shift_w, max_shift_h,remove_blanks=arg_in
     Yr=cb.load(fname,fr=fr)
     Yr=Yr-np.percentile(Yr,1)     # needed to remove baseline
-    Yr=Yr[:,margins_out:-margins_out,margins_out:-margins_out] # borders create troubles
+    if margins_out!=0:
+        Yr=Yr[:,margins_out:-margins_out,margins_out:-margins_out] # borders create troubles
     Yr,shifts,xcorrs,template=Yr.motion_correct(max_shift_w=max_shift_w, max_shift_h=max_shift_h,  method='opencv',template=template) 
     template=Yr.bin_median()
     if remove_blanks:    

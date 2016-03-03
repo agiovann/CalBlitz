@@ -23,6 +23,7 @@ import h5py
 import cPickle as cpk
 from scipy.io import loadmat
 from matplotlib import animation
+import pylab as pl
 
 try:
     plt.ion()
@@ -98,7 +99,8 @@ class movie(ts.timeseries):
 
         '''
         
-        # adjust the movie so that valuse are non negative   
+        # adjust the movie so that valuse are non negative  
+        
         min_val=np.min(np.mean(self,axis=0))
         self=self-min_val
         
@@ -680,7 +682,7 @@ class movie(ts.timeseries):
             zp=np.std(self,axis=0)
         else:
             raise Exception('Method not implemented')
-        pl.imshow(zp,**kwargs)
+        pl.imshow(zp,cmap=cmap,aspect=aspect,**kwargs)
         return zp
         
     def local_correlations_movie(self,window=10):
@@ -898,7 +900,7 @@ def to_3D(mov2D,shape,order='F'):
     """
     transform to 3D a vectorized movie
     """
-	return np.reshape(mov2D,shape,order=order) 
+    return np.reshape(mov2D,shape,order=order) 
 
         
              

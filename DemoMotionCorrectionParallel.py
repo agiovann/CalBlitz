@@ -11,8 +11,8 @@ try:
     %autoreload 2
     print 1
 except:
-    print 'NOT IPYTHON'
 
+    print 'NOT IPYTHON'
 import matplotlib as mpl
 mpl.use('TKAgg')
 from matplotlib import pyplot as plt
@@ -43,7 +43,7 @@ for file in os.listdir("./"):
 fnames.sort()
 print fnames  
 #%%
-n_processes = np.maximum(psutil.cpu_count() - 2,1) # roughly number of cores on your machine minus 1
+n_processes = 2#np.maximum(psutil.cpu_count() - 2,1) # roughly number of cores on your machine minus 1
 #print 'using ' + str(n_processes) + ' processes'
 p=2 # order of the AR model (in general 1 or 2)
 print "Stopping  cluster to avoid unnencessary use of memory...."
@@ -52,7 +52,7 @@ cse.utilities.stop_server()
 cse.utilities.start_server(n_processes)
 #%%
 t1 = time()
-file_res=cb.motion_correct_parallel(fnames,30,template=None,margins_out=10,max_shift_w=5, max_shift_h=5)
+file_res=cb.motion_correct_parallel(fnames,40,template=None,margins_out=0,max_shift_w=15, max_shift_h=15,backend='single_thread')
 #%%   
 all_movs=[]
 for f in  file_res:
@@ -62,16 +62,16 @@ for f in  file_res:
         pl.subplot(1,2,2)
         pl.plot(fl['shifts'])       
         all_movs.append(fl['template'][np.newaxis,:,:])
-        pl.pause(.1)
+        pl.pause(2)
         pl.cla()
-        
+#%%        
 all_movs=cb.movie(np.concatenate(all_movs,axis=0),fr=10)
 all_movs,shifts,_,_=all_movs.motion_correct(template=np.median(all_movs,axis=0))
 template=np.median(all_movs,axis=0)
 np.save('template_total',template)
-pl.imshow(template,cmap=pl.cm.gray,vmax=100)
+#pl.imshow(template,cmap=pl.cm.gray,vmax=100)
 #%%
-file_res=cb.motion_correct_parallel(fnames,30,template=template,margins_out=10,max_shift_w=10, max_shift_h=10,remove_blanks=False)
+file_res=cb.motion_correct_parallel(fnames,40,template=template,margins_out=0,max_shift_w=25, max_shift_h=25,remove_blanks=False)
 #%%
 for f in  file_res:
     with np.load(f+'npz') as fl:
@@ -92,7 +92,7 @@ for f in  fnames:
         
     print f
     Yr=cb.load(f[:-3]+'hdf5')
-    Yr=Yr.resize(fx=1,fy=1,fz=.5)
+    Yr=Yr.resize(fx=1,fy=1,fz=.2)
     Yr = np.transpose(Yr,(1,2,0)) 
     d1,d2,T=Yr.shape
     Yr=np.reshape(Yr,(d1*d2,T),order='F')
@@ -103,7 +103,7 @@ for f in  fnames:
 big_mov=np.concatenate(big_mov,axis=-1)
 big_shifts=np.concatenate(big_shifts,axis=0)
 #%%
-np.save('Yr.npy',big_mov)
+np.save('Yr_DS.npy',big_mov)
 np.save('big_shifts.npy',big_shifts)
 
 #%%
