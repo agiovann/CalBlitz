@@ -23,8 +23,12 @@ knots = np.hstack([knots[0]-(knots[1]-knots[0]),knots,knots[-1]+(knots[-1]-knots
 weights=knots[:-2]
 order=len(knots)-len(weights)-1
 
+x=range(T.shape[0])
 
-
+B = np.zeros((len(x),len(weights)))
+for ii in range(len(knots)-order-1):
+    B[:,ii] = bin(this.knots,ii,this.order,x);
+end
 
 spl = fastBSpline(knots,knots(1:end-2))
 
