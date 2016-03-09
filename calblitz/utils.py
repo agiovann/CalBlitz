@@ -164,12 +164,9 @@ def process_movie_parallel(arg_in):
     Yr=Yr-np.percentile(Yr,1)     # needed to remove baseline
     if margins_out!=0:
         Yr=Yr[:,margins_out:-margins_out,margins_out:-margins_out] # borders create troubles
-    Yr,shifts,xcorrs,template=Yr.motion_correct(max_shift_w=max_shift_w, max_shift_h=max_shift_h,  method='opencv',template=template) 
+    Yr,shifts,xcorrs,template=Yr.motion_correct(max_shift_w=max_shift_w, max_shift_h=max_shift_h,  method='opencv',template=template,remove_blanks=remove_blanks) 
     template=Yr.bin_median()
-    if remove_blanks:    
-        max_h,max_w= np.max(shifts,axis=0)
-        min_h,min_w= np.min(shifts,axis=0)
-        Yr=Yr.crop(crop_top=max_h,crop_bottom=-min_h+1,crop_left=max_w,crop_right=-min_w,crop_begin=0,crop_end=0)
+
 
     Yr.save(fname[:-3]+'hdf5')        
 

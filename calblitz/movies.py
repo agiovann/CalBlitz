@@ -76,7 +76,7 @@ class movie(ts.timeseries):
             raise Exception('Input must be an ndarray, use load instead!')
     
     
-    def motion_correct(self, max_shift_w=5,max_shift_h=5, num_frames_template=None, template=None,method='opencv'):
+    def motion_correct(self, max_shift_w=5,max_shift_h=5, num_frames_template=None, template=None,method='opencv',remove_blanks=False):
         
         '''
         Extract shifts and motion corrected movie automatically, for more control consider the functions extract_shifts and apply_shifts   
@@ -126,6 +126,12 @@ class movie(ts.timeseries):
         self=self.apply_shifts(shifts,interpolation='cubic',method=method)
         self=self+min_val       
         
+        if remove_blanks:
+            max_h,max_w= np.max(shifts,axis=0)
+            min_h,min_w= np.min(shifts,axis=0)
+            self=self.crop(crop_top=max_h,crop_bottom=-min_h+1,crop_left=max_w,crop_right=-min_w,crop_begin=0,crop_end=0)
+        
+         
         return self,shifts,xcorrs,template
 
                
