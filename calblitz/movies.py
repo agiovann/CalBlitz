@@ -772,15 +772,29 @@ class movie(ts.timeseries):
         
     
 
-def load(file_name,fr=None,start_time=0,meta_data=None,subindices=None):
+def load(file_name,fr=None,start_time=0,meta_data=None,subindices=None,shape=None):
     '''
     load movie from file. 
     
     Parameters
     -----------
-    file_name: name of file. Possible extensions are tif, avi, npy, (npz and hdf5 are usable only if saved by calblitz)
-    fr=None,start_time=0,meta_data=None, same as for calblitz.movie
-    subindices=None: iterable indexes, for loading only portion of the movie
+    file_name: string 
+        name of file. Possible extensions are tif, avi, npy, (npz and hdf5 are usable only if saved by calblitz)
+    fr: float
+        frame rate
+    start_time: float
+        initial time for frame 1
+    meta_data: dict 
+        same as for calblitz.movie
+    subindices: iterable indexes
+        for loading only portion of the movie
+    shape: tuple of two values
+        dimension of the movie along x and y if loading from a two dimensional numpy array
+    
+    Returns
+    -------
+    mov: calblitz.movie
+        
     '''  
     
     # case we load movie from file
@@ -845,7 +859,14 @@ def load(file_name,fr=None,start_time=0,meta_data=None,subindices=None):
                 input_arr=np.load(file_name)[subindices]     
             else:                   
                 input_arr=np.load(file_name)
-                
+            if input_arr.ndim==2:
+                if shape is not None:
+                    d,T=np.shape(input_arr)
+                    d1,d2=shape
+                    input_arr=np.transpose(np.reshape(input_arr,(d1,d2,T),order='F'),(2,0,1))
+                else:
+                    raise Exception('Loaded vector is 2D , you need to provide the shape parameter')
+           
         elif extension == '.mat': # load npy file     
             input_arr=loadmat(file_name)['data']
             input_arr=np.rollaxis(input_arr,2,-3)
