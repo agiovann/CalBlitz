@@ -37,11 +37,13 @@ import calblitz as cb
 #%%
 import os
 fnames=[]
-for file in os.listdir("./"):
+for file in os.listdir("movies/"):
     if file.endswith(".tif"):
         fnames.append(file)
 fnames.sort()
 print fnames  
+#%%
+fnames=['./movies/demoMovie_PC.tif']
 #%%
 n_processes = 2#np.maximum(psutil.cpu_count() - 2,1) # roughly number of cores on your machine minus 1
 #print 'using ' + str(n_processes) + ' processes'
