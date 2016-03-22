@@ -190,7 +190,10 @@ def extract_rois_patch(file_name,d1,d2,rf=5,stride = 2):
     A2,b2,C2 = cse.spatial.update_spatial_components(Yr, C_m, f, A_m, sn=sn, **options['spatial_params'])
     A_or2, C_or2, srt2 = cse.utilities.order_components(A2,C2)
     A_norm2=np.array([A_or2[:,rr]/np.sqrt(np.sum(A_or2[:,rr]**2)) for rr in range(A_or2.shape[-1])]).T
+    options['temporal_params']['p'] = 2 # set it back to original value to perform full deconvolution
+    C2,f2,S2,bl2,c12,neurons_sn2,g21,YrA = cse.temporal.update_temporal_components(Yr,A2,b2,C2,f,bl=None,c1=None,sn=None,g=None,**options['temporal_params'])
+    A_or, C_or, srt = cse.utilities.order_components(A2,C2)
     
-    return A1,A2,C1,C2
+    return A1,A2,C1
 #%%
 
