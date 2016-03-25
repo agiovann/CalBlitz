@@ -118,6 +118,7 @@ def extract_patch_coordinates(d1,d2,rf=7,stride = 5):
     return coords_flat,coords_2d
 #%%
 def extract_rois_patch(file_name,d1,d2,rf=5,stride = 2):
+    not_completed, in_progress
     rf=6
     stride = 2
     idx_flat,idx_2d=extract_patch_coordinates(d1, d2, rf=rf,stride = stride)
@@ -196,4 +197,89 @@ def extract_rois_patch(file_name,d1,d2,rf=5,stride = 2):
     
     return A1,A2,C1
 #%%
+def online_kmeans(m,batch_size=128,n_components=81,verbose=True, patch_size = (20, 20),max_patches=10):
+    """ using MiniBatchKmeans. Does not realy work unfortunately...
+    """
+    from sklearn.cluster import MiniBatchKMeans
+    from sklearn.feature_extraction.image import extract_patches_2d
+    import time
+    rng = np.random.RandomState(0)
+    kmeans = MiniBatchKMeans(n_clusters=n_components, random_state=rng, verbose=verbose)
+    m=np.array(m,dtype=np.float32)
+    
+    buffer = []
+    index = 1
+    t0 = time.time()
+    
+    # The online learning part: cycle over the whole dataset 6 times
+    index = 0
+    for _ in range(6):
+        for img in m:
+            data = extract_patches_2d(img, patch_size, max_patches=max_patches,
+                                      random_state=rng)
+            data = np.reshape(data, (len(data), -1))
+            buffer.append(data)
+            index += 1
+            if index % 10 == 0:
+                data = np.concatenate(buffer, axis=0)
+                data -= np.mean(data, axis=0)
+                data /= np.std(data, axis=0)
+                kmeans.partial_fit(data)
+                buffer = []
+            if index % 100 == 0:
+                print('Partial fit of %4i out of %i' % (index, 6 * m.shape[0])) 
+    
+    dt = time.time() - t0
+    print('done in %.2fs.' % dt)
 
+    # Plot the results
+    out_patch=[]
+    pl.figure(figsize=(4.2, 4))
+    row_col=np.ceil(np.sqrt(n_components))
+    for i, patch in enumerate(kmeans.cluster_centers_):
+        pl.subplot(row_col,row_col , i + 1)
+        pl.imshow(patch.reshape(patch_size), cmap=pl.cm.jet,
+                   interpolation='nearest')
+        out_patch.append(patch.reshape(patch_size))
+        pl.xticks(())
+        pl.yticks(())
+    
+    
+    pl.suptitle('Patches of faces\nTrain time %.1fs on %d patches' %
+                 (dt, 8 * m.shape[0]), fontsize=16)
+    pl.subplots_adjust(0.08, 0.02, 0.92, 0.85, 0.08, 0.23)
+    
+    pl.show()
+    return out_patch
+ #%%
+def online_dict_learn(m,batch_size=128,n_components=81,verbose=True, patch_size = (20, 20),max_patches=10):
+    
+#%%
+    from sklearn.decomposition import MiniBatchDictionaryLearning,SparsePCA,NMF
+    mdl = MiniBatchDictionaryLearning(n_components=5, split_sign=False,
+                                                  n_iter=50, batch_size=50)
+            
+    alpha= 10e2# PC                                     
+#    alpha=10e1# Jeff
+    
+    mdl = NMF(n_components=50,verbose=True,init='nndsvd',tol=1e-10,max_iter=600,shuffle=True,alpha=alpha,l1_ratio=1)
+    perc=8 #PC   
+    m1= np.maximum(0,m-np.percentile(m,perc,axis=0))[:,10:-10,10:-10]#[:,20:35,20:35].resize(1,1,.05)
+                                                  
+#    mdl = NMF(n_components=50,verbose=True,init='nndsvd',tol=1e-10,max_iter=600,shuffle=True,alpha=50e-2,l1_ratio=1)                                              
+#    m1= np.maximum(0,m[:,10:-10,10:-10].computeDFF()[0])#[:,20:35,20:35].resize(1,1,.05)
+    
+#    mdl = NMF(n_components=50,verbose=True,init='nndsvd',tol=1e-10,max_iter=600,shuffle=True,alpha=10e-1,l1_ratio=1)
+#    win_loc=5#PC
+#    win_loc=12
+#    m1=np.maximum(0,m[:,10:-10,10:-10].local_correlations_movie(window=win_loc))
+    
+
+    T,d1,d2=np.shape(m1)
+    d=d1*d2
+    yr=np.reshape(m1,[T,d],order='F')
+    X=mdl.fit_transform(yr.T)
+    pl.figure()
+    for idx,mm in enumerate(X.T):
+        pl.subplot(8,7,idx+1)
+        pl.imshow(np.reshape(mm,(d1,d2),order='F'))

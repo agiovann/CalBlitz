@@ -157,10 +157,14 @@ class timeseries(np.ndarray):
             vw.release()
 
         elif extension == '.mat':
-            if self.meta_data[0] is None:
-                savemat(file_name,{'input_arr':np.rollaxis(self,axis=0,start=3), 'start_time':self.start_time,'fr':self.fr,'meta_data':[],'file_name':self.file_name})
+            if self.file_name[0] is not None:
+                f_name=self.file_name
             else:
-                savemat(file_name,{'input_arr':np.rollaxis(self,axis=0,start=3), 'start_time':self.start_time,'fr':self.fr,'meta_data':self.meta_data,'file_name':self.file_name})
+                f_name=''
+            if self.meta_data[0] is None:                
+                savemat(file_name,{'input_arr':np.rollaxis(self,axis=0,start=3), 'start_time':self.start_time,'fr':self.fr,'meta_data':[],'file_name':f_name})
+            else:
+                savemat(file_name,{'input_arr':np.rollaxis(self,axis=0,start=3), 'start_time':self.start_time,'fr':self.fr,'meta_data':self.meta_data,'file_name':f_name})
             
             
         elif extension == '.hdf5':            
