@@ -661,7 +661,32 @@ class movie(ts.timeseries):
         return self
         
       
-    
+    def gaussian_blur_2D(self,kernel_size_x=5,kernel_size_y=5,kernel_std_x=1,kernel_std_y=1,borderType=cv2.BORDER_REPLICATE):
+        """
+        Compute gaussian blut in 2D. Might be useful when motion correcting
+
+        Parameters
+        ----------
+        kernel_size: double
+            see opencv documentation of GaussianBlur
+        kernel_std_: double
+            see opencv documentation of GaussianBlur
+        borderType: int
+            see opencv documentation of GaussianBlur
+            
+        Returns
+        --------        
+        self: ndarray
+            blurred movie
+        """        
+        
+        for idx,fr in enumerate(self):
+                print idx
+                self[idx] = cv2.GaussianBlur(fr,ksize=(kernel_size_x,kernel_size_y),sigmaX=kernel_std_x,sigmaY=kernel_std_y,borderType=borderType)  
+                
+        return self       
+                
+        
     def resample(self,new_time_vect):
         print 1        
     
