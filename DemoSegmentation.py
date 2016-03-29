@@ -16,7 +16,7 @@ import numpy as np
 
 
 #%%
-filename='demoMovie.tif'
+filename='movies/demoMovie_PC.tif'
 frameRate=15.62;
 start_time=0;
 #%%
@@ -37,7 +37,10 @@ m=m.crop(crop_top=max_h,crop_bottom=-min_h+1,crop_left=max_w,crop_right=-min_w,c
 
 #%% play movie
 print 'Playing movie, press q to stop...'
-m.play(fr=50,gain=3.0,magnification=1)
+try:
+    m.play(backend='opencv',fr=30,gain=2.,magnification=2)
+except:
+    m.play(fr=30,gain=2.0,magnification=1)
 
 #%% resize to increase SNR and have better convergence of segmentation algorithms
 resizeMovie=False
@@ -67,7 +70,7 @@ if False:
 #pl.imshow(fovs)
 
 #%%
-#spcomps=m.IPCA_io(n_components=40, fun='logcosh', max_iter=1000, tol=1e-20)
+#spcomps=m.IPCA_io(n_components=30, fun='logcosh', max_iter=1000, tol=1e-20)
 #spcomps=np.rollaxis(spcomps,2)
 #cb.matrixMontage(np.asarray(spcomps),cmap=pl.cm.gray)
 #%% compute spatial components via NMF
