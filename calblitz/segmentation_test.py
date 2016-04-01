@@ -196,7 +196,7 @@ def extract_rois_patch(file_name,d1,d2,rf=5,stride = 2):
     A_or, C_or, srt = cse.utilities.order_components(A2,C2)
     
     return A1,A2,C1
-#%%
+#%% 
 def online_kmeans(m,batch_size=128,n_components=81,verbose=True, patch_size = (20, 20),max_patches=10):
     """ using MiniBatchKmeans. Does not realy work unfortunately...
     """
@@ -251,7 +251,7 @@ def online_kmeans(m,batch_size=128,n_components=81,verbose=True, patch_size = (2
     
     pl.show()
     return out_patch
- #%%
+#%%
 #def online_dict_learn(m,batch_size=128,n_components=81,verbose=True, patch_size = (20, 20),max_patches=10):
 #    
 ##%%
