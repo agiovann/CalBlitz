@@ -252,34 +252,35 @@ def online_kmeans(m,batch_size=128,n_components=81,verbose=True, patch_size = (2
     pl.show()
     return out_patch
  #%%
-def online_dict_learn(m,batch_size=128,n_components=81,verbose=True, patch_size = (20, 20),max_patches=10):
-    
-#%%
-    from sklearn.decomposition import MiniBatchDictionaryLearning,SparsePCA,NMF
-    mdl = MiniBatchDictionaryLearning(n_components=5, split_sign=False,
-                                                  n_iter=50, batch_size=50)
-            
-    alpha= 10e2# PC                                     
-#    alpha=10e1# Jeff
-    
-    mdl = NMF(n_components=50,verbose=True,init='nndsvd',tol=1e-10,max_iter=600,shuffle=True,alpha=alpha,l1_ratio=1)
-    perc=8 #PC   
-    m1= np.maximum(0,m-np.percentile(m,perc,axis=0))[:,10:-10,10:-10]#[:,20:35,20:35].resize(1,1,.05)
-                                                  
-#    mdl = NMF(n_components=50,verbose=True,init='nndsvd',tol=1e-10,max_iter=600,shuffle=True,alpha=50e-2,l1_ratio=1)                                              
-#    m1= np.maximum(0,m[:,10:-10,10:-10].computeDFF()[0])#[:,20:35,20:35].resize(1,1,.05)
-    
-#    mdl = NMF(n_components=50,verbose=True,init='nndsvd',tol=1e-10,max_iter=600,shuffle=True,alpha=10e-1,l1_ratio=1)
-#    win_loc=5#PC
-#    win_loc=12
-#    m1=np.maximum(0,m[:,10:-10,10:-10].local_correlations_movie(window=win_loc))
-    
-
-    T,d1,d2=np.shape(m1)
-    d=d1*d2
-    yr=np.reshape(m1,[T,d],order='F')
-    X=mdl.fit_transform(yr.T)
-    pl.figure()
-    for idx,mm in enumerate(X.T):
-        pl.subplot(8,7,idx+1)
-        pl.imshow(np.reshape(mm,(d1,d2),order='F'))
+#def online_dict_learn(m,batch_size=128,n_components=81,verbose=True, patch_size = (20, 20),max_patches=10):
+#    
+##%%
+#    
+#    from sklearn.decomposition import MiniBatchDictionaryLearning,SparsePCA,NMF
+#    mdl = MiniBatchDictionaryLearning(n_components=5, split_sign=False,
+#                                                  n_iter=50, batch_size=50)
+#            
+#    alpha= 10e2# PC                                     
+##    alpha=10e1# Jeff
+#    
+#    mdl = NMF(n_components=15,verbose=True,init='nndsvd',tol=1e-10,max_iter=500,shuffle=True,alpha=alpha,l1_ratio=1)
+#    perc=8 #PC   
+#    m1= np.maximum(0,m-np.percentile(m,perc,axis=0))#[:,20:35,20:35].resize(1,1,.05)
+#                                                  
+##    mdl = NMF(n_components=50,verbose=True,init='nndsvd',tol=1e-10,max_iter=600,shuffle=True,alpha=50e-2,l1_ratio=1)                                              
+##    m1= np.maximum(0,m[:,10:-10,10:-10].computeDFF()[0])#[:,20:35,20:35].resize(1,1,.05)
+#    
+##    mdl = NMF(n_components=50,verbose=True,init='nndsvd',tol=1e-10,max_iter=600,shuffle=True,alpha=10e-1,l1_ratio=1)
+##    win_loc=5#PC
+##    win_loc=12
+##    m1=np.maximum(0,m[:,10:-10,10:-10].local_correlations_movie(window=win_loc))
+#    
+#
+#    T,d1,d2=np.shape(m1)
+#    d=d1*d2
+#    yr=np.reshape(m1,[T,d],order='F')
+#    X=mdl.fit_transform(yr.T)
+#    pl.figure()
+#    for idx,mm in enumerate(X.T):
+#        pl.subplot(6,5,idx+1)
+#        pl.imshow(np.reshape(mm,(d1,d2),order='F'),cmap=pl.cm.gray)
