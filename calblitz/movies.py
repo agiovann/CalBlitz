@@ -236,7 +236,7 @@ class movie(ts.timeseries):
 
         
         
-    def apply_shifts(self, shifts,interpolation='linear',method='opencv'):
+    def apply_shifts(self, shifts,interpolation='linear',method='opencv',remove_blanks=False):
         """ 
         Apply precomputed shifts to a movie, using subpixels adjustment (cv2.INTER_CUBIC function)
         
@@ -305,6 +305,11 @@ class movie(ts.timeseries):
              else:
                  raise Exception('Unknown shift  application method')
 
+        if remove_blanks:
+            max_h,max_w= np.max(shifts,axis=0)
+            min_h,min_w= np.min(shifts,axis=0)
+            self=self.crop(crop_top=max_h,crop_bottom=-min_h+1,crop_left=max_w,crop_right=-min_w,crop_begin=0,crop_end=0)
+            
         return self
     
 
@@ -660,6 +665,30 @@ class movie(ts.timeseries):
             
         return self
         
+        
+    def guided_filter_blur_2D(self,guide_filter,radius=5, eps=0):
+        """ 
+        performs guided filtering on each frame. See opencv documentation of cv2.ximgproc.guidedFilter
+        """       
+        for idx,fr in enumerate(self):
+            if idx%1000==0:
+                print idx
+            self[idx] =  cv2.ximgproc.guidedFilter(guide_filter,fr,radius=radius,eps=eps)  
+
+        return self
+    
+    def bilateral_blur_2D(self,diameter=5,sigmaColor=10000,sigmaSpace=0):
+        """ 
+        performs bilateral filtering on each frame. See opencv documentation of cv2.bilateralFilter
+        """        
+        for idx,fr in enumerate(self):
+            if idx%1000==0:
+                print idx
+            self[idx] =   cv2.bilateralFilter(fr,diameter,sigmaColor,sigmaSpace)     
+        
+        return self
+        
+    
       
     def gaussian_blur_2D(self,kernel_size_x=5,kernel_size_y=5,kernel_std_x=1,kernel_std_y=1,borderType=cv2.BORDER_REPLICATE):
         """
@@ -686,6 +715,30 @@ class movie(ts.timeseries):
                 
         return self       
                 
+    def median_blur_2D(self,kernel_size=3):
+        """
+        Compute gaussian blut in 2D. Might be useful when motion correcting
+
+        Parameters
+        ----------
+        kernel_size: double
+            see opencv documentation of GaussianBlur
+        kernel_std_: double
+            see opencv documentation of GaussianBlur
+        borderType: int
+            see opencv documentation of GaussianBlur
+            
+        Returns
+        --------        
+        self: ndarray
+            blurred movie
+        """        
+        
+        for idx,fr in enumerate(self):
+                print idx
+                self[idx] = cv2.medianBlur(fr,ksize=kernel_size)  
+                
+        return self   
         
     def resample(self,new_time_vect):
         print 1        

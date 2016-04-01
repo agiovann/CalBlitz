@@ -35,6 +35,17 @@ m=cb.load(filename, fr=frameRate,start_time=start_time);
 m.save(filename_hdf5)
 #%% backend='opencv' is much faster
 m.play(fr=100,gain=5.0,magnification=1,backend='pylab')    
+#%%
+low_SNR=False
+if low_SNR:
+    N=1000     
+    mn1=m.copy().bilateral_blur_2D(diameter=5,sigmaColor=10000,sigmaSpace=0)     
+    
+    mn1,shifts,xcorrs, template=mn1.motion_correct()
+    mn2=mn1.apply_shifts(shifts)     
+    #mn1=cb.movie(np.transpose(np.array(Y_n),[2,0,1]),fr=30)
+    mn=cb.concatenate([mn1,mn2],axis=1)
+    mn.play(gain=5.,magnification=4,backend='opencv',fr=30)
 #%% automatic parameters motion correction
 max_shift_h=10; # maximum allowed shifts in y
 max_shift_w=10;  # maximum allowed shifts in x

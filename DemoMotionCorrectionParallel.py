@@ -53,6 +53,17 @@ sys.stdout.flush()
 cse.utilities.stop_server() 
 cse.utilities.start_server(n_processes)
 #%%
+low_SNR=False
+if low_SNR:
+    N=1000     
+    mn1=m.copy().bilateral_blur_2D(diameter=5,sigmaColor=10000,sigmaSpace=0)     
+    
+    mn1,shifts,xcorrs, template=mn1.motion_correct()
+    mn2=mn1.apply_shifts(shifts)     
+    #mn1=cb.movie(np.transpose(np.array(Y_n),[2,0,1]),fr=30)
+    mn=cb.concatenate([mn1,mn2],axis=1)
+    mn.play(gain=5.,magnification=4,backend='opencv',fr=30)
+#%%
 t1 = time()
 file_res=cb.motion_correct_parallel(fnames,40,template=None,margins_out=0,max_shift_w=15, max_shift_h=15,backend='single_thread')
 #%%   
