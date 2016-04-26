@@ -144,6 +144,7 @@ class timeseries(np.ndarray):
         elif extension == '.npz':
             np.savez(file_name,input_arr=self, start_time=self.start_time,fr=self.fr,meta_data=self.meta_data,file_name=self.file_name)
             
+        
         elif extension == '.avi':
             codec=cv2.cv.FOURCC('I','Y','U','V')
             np.clip(self,np.percentile(self,1),np.percentile(self,99),self)

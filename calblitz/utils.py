@@ -20,7 +20,11 @@ from ipyparallel import Client
 #%%
 def playMatrix(mov,gain=1.0,frate=.033):
     for frame in mov: 
-        cv2.imshow('frame',frame*gain)
+        if gain!=1:
+            cv2.imshow('frame',frame*gain)
+        else:
+            cv2.imshow('frame',frame)
+            
         if cv2.waitKey(int(frate*1000)) & 0xFF == ord('q'):
             cv2.destroyAllWindows()
             break  

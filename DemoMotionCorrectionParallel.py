@@ -45,7 +45,7 @@ print fnames
 #%%
 fnames=['./movies/demoMovie_PC.tif']
 #%%
-n_processes = 8#np.maximum(psutil.cpu_count() - 2,1) # roughly number of cores on your machine minus 1
+n_processes = 3#np.maximum(psutil.cpu_count() - 2,1) # roughly number of cores on your machine minus 1
 #print 'using ' + str(n_processes) + ' processes'
 p=2 # order of the AR model (in general 1 or 2)
 print "Stopping  cluster to avoid unnencessary use of memory...."
@@ -101,12 +101,13 @@ print time() - t1 - 200
 #%%
 big_mov=[];
 big_shifts=[]
+fr_remove_init=30
 for f in  fnames:
     with np.load(f[:-3]+'npz') as fl:
         big_shifts.append(fl['shifts'])
         
     print f
-    Yr=cb.load(f[:-3]+'hdf5')
+    Yr=cb.load(f[:-3]+'hdf5')[fr_remove_init:]
     Yr=Yr.resize(fx=1,fy=1,fz=.2)
     Yr = np.transpose(Yr,(1,2,0)) 
     d1,d2,T=Yr.shape
@@ -123,6 +124,9 @@ np.save('big_shifts.npy',big_shifts)
 
 #%%
 _,d1,d2=np.shape(cb.load(fnames[0][:-3]+'hdf5',subindices=range(3),fr=10))
-Yr=np.load('Yr.npy',mmap_mode='r')  
+Yr=np.load('Yr_DS.npy',mmap_mode='r')  
 d,T=Yr.shape      
 Y=np.reshape(Yr,(d1,d2,T),order='F')
+Y=cb.movie(np.array(np.transpose(Y,(2,0,1))),fr=30)
+#%%
+Y.play(backend='opencv',fr=30,gain=10,magnification=1)
