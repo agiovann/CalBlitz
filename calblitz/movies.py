@@ -108,14 +108,15 @@ class movie(ts.timeseries):
             if num_frames_template is None:
                 num_frames_template=10e7/(512*512)
             
-            frames_to_skip=np.round(np.maximum(1,self.shape[0]/num_frames_template)) # sometimes it is convenient to only consider a subset of the movie when computing the median
-            m=self.copy()
-            idx=np.random.randint(0,high=self.shape[0],size=(num_frames_template,))
-            submov=m[::frames_to_skip,:]
+            frames_to_skip=np.round(np.maximum(1,self.shape[0]/num_frames_template)) # sometimes it is convenient to only consider a subset of the movie when computing the median            
+            #idx=np.random.randint(0,high=self.shape[0],size=(num_frames_template,))
+            submov=self[::frames_to_skip,:].copy()
             templ=submov.bin_median(); # create template with portion of movie
             shifts,xcorrs=submov.extract_shifts(max_shift_w=max_shift_w, max_shift_h=max_shift_h, template=templ, method=method)  #
             submov.apply_shifts(shifts,interpolation='cubic',method=method)
             template=submov.bin_median()
+            del submov
+            m=self.copy()
             shifts,xcorrs=m.extract_shifts(max_shift_w=max_shift_w, max_shift_h=max_shift_h, template=template, method=method)  #
             m=m.apply_shifts(shifts,interpolation='cubic',method=method)
             template=(m.bin_median())      
@@ -732,6 +733,10 @@ class movie(ts.timeseries):
         """ 
         performs bilateral filtering on each frame. See opencv documentation of cv2.bilateralFilter
         """        
+        if type(self[0,0,0]) is not np.float32:
+            warnings.warn('Casting the array to float 32')
+            self=np.asanyarray(self,dtype=np.float32)
+            
         for idx,fr in enumerate(self):
             if idx%1000==0:
                 print idx
