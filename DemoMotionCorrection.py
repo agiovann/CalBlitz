@@ -1,5 +1,11 @@
 # -*- coding: utf-8 -*-
 """
+Created on Tue Apr 26 12:13:18 2016
+
+@author: agiovann
+"""
+# -*- coding: utf-8 -*-
+"""
 Created on Tue Jun 30 20:56:07 2015
 @author: agiovann
 """
@@ -127,4 +133,5 @@ m=m.crop(crop_top=max_h,crop_bottom=-min_h+1,crop_left=max_w,crop_right=-min_w,c
 
 #%% play movie
 m.play(fr=50,gain=3.0,magnification=1)
+
 
