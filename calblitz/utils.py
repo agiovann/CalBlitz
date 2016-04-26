@@ -112,7 +112,7 @@ def display_animation(anim,fps=20):
     return HTML(anim_to_html(anim,fps=fps))    
 
 #%%
-def motion_correct_parallel(file_names,fr,template=None,margins_out=0,max_shift_w=5, max_shift_h=5,remove_blanks=False,backend='single_thread'):
+def motion_correct_parallel(file_names,fr,template=None,margins_out=0,max_shift_w=5, max_shift_h=5,remove_blanks=False,apply_smooth=True,backend='single_thread'):
     """motion correct many movies usingthe ipyparallel cluster
     Parameters
     ----------
@@ -129,23 +129,25 @@ def motion_correct_parallel(file_names,fr,template=None,margins_out=0,max_shift_
     """
     args_in=[];
     for f in file_names:
-        args_in.append((f,fr,margins_out,template,max_shift_w, max_shift_h,remove_blanks))
+        args_in.append((f,fr,margins_out,template,max_shift_w, max_shift_h,remove_blanks,apply_smooth))
         
-    try:
-        if backend is 'ipyparallel':
-            c = Client()   
-            dview=c[:]
-            file_res = dview.map_sync(process_movie_parallel, args_in)                         
-        elif backend is 'single_thread':
-            file_res = map(process_movie_parallel, args_in)                         
-        else:
-            raise Exception('Unknown backend')
-    finally:
-        if backend is 'ipyparallel':
-            dview.results.clear()       
-            c.purge_results('all')
-            c.purge_everything()
-            c.close()
+#    try:
+    if backend is 'ipyparallel':
+        c = Client()   
+        dview=c[:]
+        file_res = dview.map_sync(process_movie_parallel, args_in)                         
+    elif backend is 'single_thread':
+        file_res = map(process_movie_parallel, args_in)                         
+    else:
+        raise Exception('Unknown backend')
+#    except:
+#        raise
+#    finally:
+#        if backend is 'ipyparallel':
+#            dview.results.clear()       
+#            c.purge_results('all')
+#            c.purge_everything()
+#            c.close()
         
             
     return file_res
@@ -158,17 +160,39 @@ def process_movie_parallel(arg_in):
     import ca_source_extraction as cse
     import calblitz as cb
     import numpy as np
+    import sys
     
-    fname,fr,margins_out,template,max_shift_w, max_shift_h,remove_blanks=arg_in
-    Yr=cb.load(fname,fr=fr)
-    Yr=Yr-np.percentile(Yr,1)     # needed to remove baseline
-    if margins_out!=0:
-        Yr=Yr[:,margins_out:-margins_out,margins_out:-margins_out] # borders create troubles
-    Yr,shifts,xcorrs,template=Yr.motion_correct(max_shift_w=max_shift_w, max_shift_h=max_shift_h,  method='opencv',template=template,remove_blanks=remove_blanks) 
-    template=Yr.bin_median()
 
+    
 
-    Yr.save(fname[:-3]+'hdf5')        
-
-    np.savez(fname[:-3]+'npz',shifts=shifts,xcorrs=xcorrs,template=template)
+    fname,fr,margins_out,template,max_shift_w, max_shift_h,remove_blanks,apply_smooth=arg_in
+    
+    with open(fname[:-4]+'.stout', "a") as log:
+        sys.stdout = log
+        
+    #    import pdb
+    #    pdb.set_trace()
+        Yr=cb.load(fname,fr=fr)
+        print 'loaded'    
+        if apply_smooth:
+            print 'applying smoothing'
+            Yr=Yr.bilateral_blur_2D(diameter=10,sigmaColor=10000,sigmaSpace=0)
+            
+        Yr=Yr-np.float32(np.percentile(Yr,1))     # needed to remove baseline
+        print 'Remove BL'
+        if margins_out!=0:
+            Yr=Yr[:,margins_out:-margins_out,margins_out:-margins_out] # borders create troubles
+        print 'motion correcting'
+        Yr,shifts,xcorrs,template=Yr.motion_correct(max_shift_w=max_shift_w, max_shift_h=max_shift_h,  method='opencv',template=template,remove_blanks=remove_blanks) 
+        print 'median computing'        
+        template=Yr.bin_median()
+        print 'saving'         
+        Yr.save(fname[:-3]+'hdf5')        
+        print 'saving 2'                 
+        np.savez(fname[:-3]+'npz',shifts=shifts,xcorrs=xcorrs,template=template)
+        print 'deleting'        
+        del Yr
+        print 'done!'
+        sys.stdout = sys.__stdout__ 
+        
     return fname[:-3]        
