@@ -37,15 +37,15 @@ import calblitz as cb
 #%%
 import os
 fnames=[]
-for file in os.listdir("movies/"):
-    if file.endswith(".tif"):
+for file in os.listdir("./"):
+    if file.startswith("k37_") and file.endswith(".tif"):
         fnames.append(file)
 fnames.sort()
 print fnames  
 #%%
 fnames=['./movies/demoMovie_PC.tif']
 #%%
-n_processes = 2#np.maximum(psutil.cpu_count() - 2,1) # roughly number of cores on your machine minus 1
+n_processes = 8#np.maximum(psutil.cpu_count() - 2,1) # roughly number of cores on your machine minus 1
 #print 'using ' + str(n_processes) + ' processes'
 p=2 # order of the AR model (in general 1 or 2)
 print "Stopping  cluster to avoid unnencessary use of memory...."
@@ -65,7 +65,9 @@ if low_SNR:
     mn.play(gain=5.,magnification=4,backend='opencv',fr=30)
 #%%
 t1 = time()
-file_res=cb.motion_correct_parallel(fnames,40,template=None,margins_out=0,max_shift_w=15, max_shift_h=15,backend='single_thread')
+file_res=cb.motion_correct_parallel(fnames,fr=30,template=None,margins_out=0,max_shift_w=15, max_shift_h=15,backend='ipyparallel',apply_smooth=False)
+t2=time()-t1
+print t2
 #%%   
 all_movs=[]
 for f in  file_res:
