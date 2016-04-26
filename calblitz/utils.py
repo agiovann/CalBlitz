@@ -135,25 +135,37 @@ def motion_correct_parallel(file_names,fr,template=None,margins_out=0,max_shift_
     for f in file_names:
         args_in.append((f,fr,margins_out,template,max_shift_w, max_shift_h,remove_blanks,apply_smooth))
         
-#    try:
-    if backend is 'ipyparallel':
-        c = Client()   
-        dview=c[:]
-        file_res = dview.map_sync(process_movie_parallel, args_in)                         
-    elif backend is 'single_thread':
-        file_res = map(process_movie_parallel, args_in)                         
-    else:
-        raise Exception('Unknown backend')
-#    except:
-#        raise
-#    finally:
-#        if backend is 'ipyparallel':
-#            dview.results.clear()       
-#            c.purge_results('all')
-#            c.purge_everything()
-#            c.close()
+    try:
         
+        if backend is 'ipyparallel':
             
+            c = Client()   
+            dview=c[:]
+            file_res = dview.map_sync(process_movie_parallel, args_in)                         
+            dview.results.clear()       
+            c.purge_results('all')
+            c.purge_everything()
+            c.close()    
+
+        elif backend is 'single_thread':
+            
+            file_res = map(process_movie_parallel, args_in)        
+                 
+        else:
+            raise Exception('Unknown backend')
+        
+            except:
+        try:
+            if backend is 'ipyparallel':
+                dview.results.clear()       
+                c.purge_results('all')
+                c.purge_everything()
+                c.close()
+        except:
+            print 'coould not close client'
+
+        raise
+                                    
     return file_res
 
 
