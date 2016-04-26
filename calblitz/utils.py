@@ -154,7 +154,8 @@ def motion_correct_parallel(file_names,fr,template=None,margins_out=0,max_shift_
         else:
             raise Exception('Unknown backend')
         
-            except:
+     except:   
+        
         try:
             if backend is 'ipyparallel':
                 dview.results.clear()       
@@ -162,7 +163,8 @@ def motion_correct_parallel(file_names,fr,template=None,margins_out=0,max_shift_
                 c.purge_everything()
                 c.close()
         except:
-            print 'coould not close client'
+
+            print 'could not close client'
 
         raise
                                     
