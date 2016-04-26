@@ -9,7 +9,7 @@ except:
 import matplotlib as mpl
 mpl.use('TKAgg')
 from matplotlib import pyplot as plt
-#plt.ion()
+plt.ion()
 
 import sys
 import numpy as np
@@ -28,19 +28,63 @@ import psutil
 import calblitz as cb
 import cv2
 import scipy
+from sklearn.decomposition import MiniBatchDictionaryLearning,PCA,NMF,IncrementalPCA
+import h5py
+#%% CREATE PATCH OF DATA
+import os
+fnames=[]
+for file in os.listdir("./"):
+    if file.startswith("k37_") and file.endswith(".tif"):
+        fnames.append(file)
+fnames.sort()
+print fnames  
 #%%
-n_processes = np.maximum(psutil.cpu_count() - 2,1) # roughly number of cores on your machine minus 1
-#print 'using ' + str(n_processes) + ' processes'
-p=2 # order of the AR model (in general 1 or 2)
+Yr=cb.load(fnames[0],fr=30)    
+Yr=Yr[:,80:130,360:410]
+pl.imshow(np.mean(Yr,0),cmap=pl.cm.gray)
+        
+#%%      
+big_mov=[];
+big_shifts=[]
+for f in  fnames[:]:
+    print f    
+    Yr=cb.load(f,fr=30)        
+    Yr=Yr[:,80:130,360:410]    
+#    pl.imshow(np.mean(Yr,0))
+    #Yr=Yr.resize(fx=1,fy=1,fz=1)
+    Yr = np.transpose(Yr,(1,2,0)) 
+    d1,d2,T=Yr.shape
+    Yr=np.reshape(Yr,(d1*d2,T),order='F')
+    print Yr.shape
+#    np.save(fname[:-3]+'npy',np.asarray(Yr))
+    big_mov.append(np.asarray(Yr))
+    
+#%% should motion correct here
+    
+#%%    
+big_mov=np.concatenate(big_mov,axis=-1)
+big_shifts=np.concatenate(big_shifts,axis=0)
+#%%
+np.save('Yr_DS_2.npy',big_mov)
+np.savez('Yr_DS_2.npz',d1=d1,d2=d2)on correct  here
 
-#%% start cluster for efficient computation
-print "Stopping  cluster to avoid unnencessary use of memory...."
-sys.stdout.flush()  
-cse.utilities.stop_server()
 
+#%% SUE ANN PATCH
+
+Yr1_tot=cb.load('SueAnn.tif',fr=30)    
+Yr1=Yr1_tot[:,80:130,360:410]
+Yr2=Yr1.copy().bilateral_blur_2D(diameter=10,sigmaColor=10000,sigmaSpace=0)
+Yr2,shifts,_,_=Yr2.motion_correct(remove_blanks=True)
+Yr3=Yr1.copy().apply_shifts(shifts,remove_blanks=True)
+Yr3.save('patch_sue.tif')
+pl.imshow(np.mean(Yr3,0),cmap=pl.cm.gray)
 #%% LOAD MOVIE AND MAKE DIMENSIONS COMPATIBLE WITH CNMF
 reload=0
-filename='patch.tif'
+filename='patch_sue.tif'
+#filename='patch_1.tif'
+#filename='patch_2.tif'
+#filename='PCsforPC.tif'
+#filename='demoMovie.tif'
 #filename='PCsforPC.tif'
 #filename='movies/demoMovie.tif'
 t = tifffile.TiffFile(filename) 
@@ -58,292 +102,277 @@ Cn = cse.utilities.local_correlations(Y)
 #n_pixels_per_process=d1*d2/n_processes # how to subdivide the work among processes
 
 pl.imshow(Cn,cmap=pl.cm.gray)
-#%%
-options = cse.utilities.CNMFSetParms(Y,p=p,gSig=[7,7],K=30)
-cse.utilities.start_server(options['spatial_params']['n_processes'])
 
-#%% PREPROCESS DATA AND INITIALIZE COMPONENTS
-t1 = time()
-Yr,sn,g,psx = cse.pre_processing.preprocess_data(Yr,**options['preprocess_params'])
-Atmp, Ctmp, b_in, f_in, center=cse.initialization.initialize_components(Y, **options['init_params'])                                                    
-print time() - t1
-
-#%% Refine manually component by clicking on neurons 
-refine_components=False
-if refine_components:
-    Ain,Cin = cse.utilities.manually_refine_components(Y,options['init_params']['gSig'],coo_matrix(Atmp),Ctmp,Cn,thr=0.9)
-else:
-    Ain,Cin = Atmp, Ctmp
-#%% plot estimated component
-crd = cse.utilities.plot_contours(coo_matrix(Ain),Cn,thr=0.9)  
-pl.show()
-#%% UPDATE SPATIAL COMPONENTS
-pl.close()
-t1 = time()
-A,b,Cin = cse.spatial.update_spatial_components(Yr, Cin, f_in, Ain, sn=sn, **options['spatial_params'])
-t_elSPATIAL = time() - t1
-print t_elSPATIAL 
-plt.figure()
-crd = cse.utilities.plot_contours(A,Cn,thr=0.9)
-#%% update_temporal_components
-pl.close()
-t1 = time()
-options['temporal_params']['p'] = 0 # set this to zero for fast updating without deconvolution
-C,f,S,bl,c1,neurons_sn,g,YrA = cse.temporal.update_temporal_components(Yr,A,b,Cin,f_in,bl=None,c1=None,sn=None,g=None,**options['temporal_params'])
-t_elTEMPORAL = time() - t1
-print t_elTEMPORAL 
-#%% merge components corresponding to the same neuron
-t1 = time()
-A_m,C_m,nr_m,merged_ROIs,S_m,bl_m,c1_m,sn_m,g_m=cse.merging.merge_components(Yr,A,b,C,f,S,sn,options['temporal_params'], options['spatial_params'], bl=bl, c1=c1, sn=neurons_sn, g=g, thr=0.8, mx=50, fast_merge = True)
-t_elMERGE = time() - t1
-print t_elMERGE  
-
-#%%
-plt.figure()
-crd = cse.plot_contours(A_m,Cn,thr=0.9)
-#%% refine spatial and temporal 
-pl.close()
-t1 = time()
-A2,b2,C2 = cse.spatial.update_spatial_components(Yr, C_m, f, A_m, sn=sn, **options['spatial_params'])
-options['temporal_params']['p'] = p # set it back to original value to perform full deconvolution
-C2,f2,S2,bl2,c12,neurons_sn2,g21,YrA = cse.temporal.update_temporal_components(Yr,A2,b2,C2,f,bl=None,c1=None,sn=None,g=None,**options['temporal_params'])
-print time() - t1
-#%%
-A_or, C_or, srt = cse.utilities.order_components(A2,C2)
-#cse.utilities.view_patches(Yr,coo_matrix(A_or),C_or,b2,f2,d1,d2,YrA = YrA[srt,:], secs=1)
-cse.utilities.view_patches_bar(Yr,coo_matrix(A_or),C_or,b2,f2, d1,d2, YrA=YrA[srt,:])  
-#plt.show(block=True) 
-plt.show()  
- 
-#%%
-
-plt.figure()
-crd = cse.utilities.plot_contours(A_or,Cn,thr=0.9)
-
-#%% STOP CLUSTER
-pl.close()
-cse.utilities.stop_server()
-#%%
-from sklearn.cluster import KMeans
-from sklearn.decomposition import PCA,NMF
-from sklearn.mixture import GMM
-
-Ys=Yr
-thresh_probability=0.5
-num_psd_elms_high_freq=49;
-cl_thr=0.8
-#[sn,psx] = get_noise_fft(Ys,options);
-#P.sn = sn(:);
-#fprintf('  done \n');
-psdx = np.sqrt(psx[:,3:]);
-X = psdx[:,1:np.minimum(np.shape(psdx)[1],150)];
-X = X-np.mean(X,axis=1)[:,np.newaxis]#     bsxfun(@minus,X,mean(X,2));     % center
-#X = X/sn[:,np.newaxis]# 
-X = X/np.percentile(X,90,axis=1)[:,np.newaxis]
-
-#X = X/(+1e-5+np.std(X,axis=1)[:,np.newaxis])
-#epsilon=1e-9
-#X = X/(epsilon+np.linalg.norm(X,axis=1,ord=1)[:,np.newaxis])
-
-
-
-pc=PCA(n_components=5)
-cp=pc.fit_transform(X)
-
-#nmf=NMF(n_components=2)
-#nmr=nmf.fit_transform(X)
-
-gmm=GMM(n_components=2)
-Cx=gmm.fit_predict(cp)
-
-L=gmm.predict_proba(cp)
-Cx1=np.vstack([np.mean(X[Cx==0],0),np.mean(X[Cx==1],0)])
-
-ind=np.argmin(np.mean(Cx1[:,-num_psd_elms_high_freq:],axis=1))
-active_pixels = (L[:,ind]>thresh_probability)
-active_pixels = L[:,ind]
-pl.imshow(np.reshape((active_pixels),(d1,d2),order='F'))
-#%%
-ff=np.zeros(np.shape(A_or)[-1])
-cl_thr=0.2
-#ff = false(1,size(Am,2));
-for i in range(np.shape(A_or)[-1]):
-    a1 = A_or[:,i]
-    a2 = A_or[:,i]*active_pixels
-    if np.sum(a2**2) >= cl_thr**2*np.sum(a1**2):
-        ff[i] = 1
-
-id_set=1
-cse.utilities.view_patches_bar(Yr,coo_matrix(A_or[:,ff==id_set]),C_or[ff==id_set,:],b2,f2, d1,d2, YrA=YrA[srt[ff==id_set],:])  
-
-
-#km=KMeans(n_clusters=2)
-#Cx=km.fit_transform(X)
-#Cx=km.fit_transform(cp)
-#Cx=km.cluster_centers_
-#L=km.labels_
-#ind=np.argmin(np.mean(Cx[:,-49:],axis=1))
-#active_pixels = (L==ind)
-#centroids = Cx;
-#%% GUIDED FILTER
-pl.imshow(np.mean(Y,axis=-1),cmap=pl.cm.gray)
-#%%
-pl.imshow(cv2.bilateralFilter(np.mean(Y,axis=-1),3,5,0),cmap=pl.cm.gray)
-#%% BILATERAL FILTER EXAMPLE
-N=10000
-#     
-m=cb.movie(np.transpose(np.array(Y[:,:,:N]),[2,0,1]),fr=30)
-m=m.resize(1,1,.1)
-
-
-mn2=m.copy()
-mn1=m.copy().bilateral_blur_2D(diameter=10,sigmaColor=10000,sigmaSpace=0)     
-
-mn1,shifts,xcorrs, template=mn1.motion_correct()
-mn2=mn2.apply_shifts(shifts)     
-#mn1=cb.movie(np.transpose(np.array(Y_n),[2,0,1]),fr=30)
-mn=cb.concatenate([mn1,m],axis=1)
-(mn-np.mean(mn)).play(gain=2.,magnification=4,backend='opencv',fr=20)
-#%% GUIDED FILTER EXAMPLE
+#%% USING FILTERS TO INCREASE SNR
 N=0#Y.shape[-1]
 N1=30000
-#     
 
 m=cb.movie(np.transpose(np.array(Y[:,:,N:N1]),[2,0,1]),fr=30)
+# denoise using PCA
 #m=m.IPCA_denoise(components=100,batch=10000)
-#m=m.resize(1,1,.5)
+
+# denoise using median filter
 #m=cb.movie(scipy.ndimage.median_filter(m, size=(3,2,2), mode='nearest'),fr=30)
+
+# denoise using bilateral filters 
 #m=m.bilateral_blur_2D(diameter=10,sigmaColor=10000,sigmaSpace=0)
+
+# denoise using percentile filter
 #m=cb.movie(scipy.ndimage.percentile_filter(m, 90, size=(3,2,2), mode='nearest'),fr=30)
+
+#denoise using gaussian filter: USE THIS!!!
 m=cb.movie(scipy.ndimage.gaussian_filter(m, sigma=(1,1,1), mode='nearest',truncate=2),fr=30)
-#m=cb.movie(scipy.ndimage.percentile_filter(m, 90, size=(3,2,2), mode='nearest'),fr=30)
-m=m.resize(1,1,.1)
-(m-np.mean(m)).play(gain=5.,magnification=4,backend='opencv',fr=300)
-#%% MITYA's APPROACH
-from sklearn.decomposition import MiniBatchDictionaryLearning,PCA,NMF,IncrementalPCA
 
-m1=m[:]
-alpha= 10e2# PC 
-#mdl = IncrementalPCA(n_components=10,batch_size=500)
-mdl = NMF(n_components=15,verbose=True,init='nndsvd',tol=1e-10,max_iter=200,shuffle=True,alpha=alpha,l1_ratio=1)
+# resize movie
+m=m.resize(1,1,.5)
+(m-np.mean(m)).play(gain=10.,magnification=4,backend='opencv',fr=20)
+#%% ONLINE NMF USING CALBLITZ
+#perc=8
+#myfloat=np.float32
+#m1= np.maximum(0,m-np.percentile(m,perc,axis=0))
+#tm,sp=m1.online_NMF(n_components=15)
+#pl.figure()
+#for idx,mm in enumerate(sp):
+#    pl.subplot(6,5,idx+1)
+#    pl.imshow(mm,cmap=pl.cm.gray)
+#%% PYTHON's BATCH NMF
+remove_baseline=False
+use_pixels_as_basis=True
+
+
+    
+
+# alpha is the L1 Norm regulatizer
+#sue ann
+remove_baseline=True
+alpha= 10e2
+n_components=20
+perc=.00001 #PC 
+
+
+# patch_1.tif  
+#alpha= 10e2
+#n_components=15
+#remove_baseline=False
+
+# demoMovie.tif
+#alpha= 200e2
+#n_components=15
+
+# PC
+#alpha= 5e2
+#n_components=50
+
+# patch_2.tif
+#alpha=5e1
+#n_components=15
+
+
+
+if remove_baseline:
+      
+    m1= np.maximum(0,m-np.percentile(m,perc,axis=0))
+else:
+    m1=m
+
+
+mdl = NMF(n_components=n_components,verbose=True,init='nndsvd',tol=1e-10,max_iter=500,shuffle=True,alpha=alpha,l1_ratio=1)
+
+
+T,d1,d2=np.shape(m1)
+d=d1*d2
+
+if use_pixels_as_basis:
+    yr=np.reshape(m1,[T,d],order='F')
+else:
+    yr=np.reshape(m1,[T,d],order='F').T
+
+
+
+X=mdl.fit(yr)
+
+if use_pixels_as_basis:
+    X=mdl.components_.T   
+else:
+    X=mdl.transform(yr)
+
+
+
+pl.figure()
+for idx,mm in enumerate(X.T):
+    pl.subplot(7,7,idx+1)
+    pl.imshow(np.reshape(mm,(d1,d2),order='F'),cmap=pl.cm.gray,vmin=np.percentile(mm,1),vmax=np.percentile(mm,99))
+#%% NOW RELOAD ORIGINAL MOVIE AND APPLY NMF INITIALIZING WITH VALUES COMPUTED ON DOWNSAMPLED VERSION
+if not use_pixels_as_basis:
+    raise Exception('You cannot reuse spatial basis since you are using traces as basis')
+    
+m1=cb.movie(np.transpose(np.array(Y[:,:,N:N1]),[2,0,1]),fr=30)
+m1=cb.movie(scipy.ndimage.gaussian_filter(m1, sigma=(1,1,0), mode='nearest',truncate=2),fr=30)
+if remove_baseline:  
+    m1= np.maximum(0,m1-np.percentile(m1,perc,axis=0))
 
 
 
 T,d1,d2=np.shape(m1)
 d=d1*d2
 yr=np.reshape(m1,[T,d],order='F')
-yr=yr.T
-X=mdl.fit(yr)
-X=mdl.components_.T
-X=mdl.transform(yr)
+
+# FIT USING THE PREVIOUSLY COMPUTED FACTORIZATION
+H=mdl.transform(yr)
+
+# RUN AGAIN NMF INITIALIZING WITH THE COMPONENTS PREVIOUSLY COMPUTED
+mdl1 = NMF(n_components=n_components,verbose=True,init='custom',tol=1e-10,max_iter=300,shuffle=True,alpha=alpha,l1_ratio=1)
+traces= mdl1.fit_transform(yr,W=H,H=mdl.components_)
+
+X1=mdl1.components_.T
 pl.figure()
-for idx,mm in enumerate(X.T):
-    pl.subplot(6,5,idx+1)
-    pl.imshow(np.reshape(mm,(d1,d2),order='F'),cmap=pl.cm.gray)
+for idx,mm in enumerate(X1.T):
+    pl.subplot(7,7,idx+1)
+    pl.imshow(np.reshape(mm,(d1,d2),order='F'),cmap=pl.cm.gray,vmin=np.percentile(mm,1),vmax=np.percentile(mm,99))
 
-#%%
-#ym=np.median(m,axis=0)
-ym=m.bin_median()
-#ym=np.std(m,axis=0)
-#clahe = cv2.createCLAHE(clipLimit=100., tileGridSize=(11,11))
-guide_filter=np.uint8(255*(ym-np.min(ym))/(np.max(ym)-np.min(ym)))
-#guide_filter=clahe.apply(guide_filter)
+pl.subplot(7,7,idx+2)
+mu=np.mean(m1,0)
+pl.imshow(mu,cmap=pl.cm.gray,vmin=np.percentile(mu,1),vmax=np.percentile(mu,99))
+    
+#%% PLAY DENOISED MOVIE
+denoised=cb.movie(np.reshape(traces.dot(X1.T),[T,d1,d2],order='F'),fr=30)
+denoised=cb.concatenate([denoised,cb.movie(np.transpose(np.array(Y[:,:,N:N1]),[2,0,1]),fr=30)],axis=2)
+#denoised=cb.concatenate([denoised,m1],axis=1)
 
-mn2=m.copy()
-mn1=m.copy()#.bilateral_blur_2D(diameter=0,sigmaColor=10000,sigmaSpace=0)     
-mn1=mn1.guided_filter_blur_2D(guide_filter,radius=3, eps=0)   
-   
-mn=cb.concatenate([mn1,m],axis=1)
-(mn-np.mean(mn)).play(gain=5.,magnification=4,backend='opencv',fr=300)
-
-#%%
-from sklearn.decomposition import MiniBatchDictionaryLearning,SparsePCA,NMF
-#m=mn1
-
-alpha= 10e2# PC                                     
-#    alpha=10e1# Jeff
-mdl = NMF(n_components=15,verbose=True,init='nndsvd',tol=1e-10,max_iter=200,shuffle=True,alpha=alpha,l1_ratio=1)
+(denoised-np.mean(denoised,0)).play(gain=8.,magnification=8,backend='opencv',fr=30)
+#%% PLAY DENOISED MOVIE ONLY UYSING SOME COMPONENTS
+idx=np.array([0  ,1,2, 3,  4,5,6,7,8,9,10,11,12,13,14])
+idx=np.array([0,12])
+denoised=cb.movie(np.reshape(traces[:,idx].dot(X1[:,idx].T),[T,d1,d2],order='F'),fr=30)
+(denoised-np.mean(denoised,0).min()).play(gain=5.,magnification=8,backend='opencv',fr=30)
 
 
+#%% PLAY RESIDUAL MOVIE
+residual=m1-denoised
+(residual).play(gain=5.,magnification=4,backend='opencv',fr=100)
 
-perc=8 #PC   
-m1= np.maximum(0,m-np.percentile(m,perc,axis=0))[:]#[:,20:35,20:35].resize(1,1,.05)
-#m1= np.maximum(0,m-mmm)[:]#[:,20:35,20:35].resize(1,1,.05)
-                                           
-#    mdl = NMF(n_components=50,verbose=True,init='nndsvd',tol=1e-10,max_iter=600,shuffle=True,alpha=50e-2,l1_ratio=1)                                              
-#    m1= np.maximum(0,m[:,10:-10,10:-10].computeDFF()[0])#[:,20:35,20:35].resize(1,1,.05)
-
-#    mdl = NMF(n_components=50,verbose=True,init='nndsvd',tol=1e-10,max_iter=600,shuffle=True,alpha=10e-1,l1_ratio=1)
-#    win_loc=5#PC
-#    win_loc=12
-#    m1=np.maximum(0,m[:,10:-10,10:-10].local_correlations_movie(window=win_loc))
+#%% plot components
+if use_pixels_as_basis:
+    pl.plot(traces)    
 
 
-T,d1,d2=np.shape(m1)
-d=d1*d2
-yr=np.reshape(m1,[T,d],order='F')
-yr=yr.T
-X=mdl.fit(yr)
-X=mdl.components_.T
-X=mdl.transform(yr)
-pl.figure()
-for idx,mm in enumerate(X.T):
-    pl.subplot(6,5,idx+1)
-    pl.imshow(np.reshape(mm,(d1,d2),order='F'),cmap=pl.cm.gray)
-#%%
-pl.plot(mdl.components_.T)    
-mdl1 = NMF(n_components=15,verbose=True,init='nndsvd',tol=1e-10,max_iter=200,shuffle=True,alpha=alpha,l1_ratio=1)
-X1=mdl1.fit_transform(mdl.components_)
-#%% ONLINE NMF
-perc=8
-myfloat=np.float32
-m1= np.maximum(0,m-np.percentile(m,perc,axis=0))
-tm,sp=m1.online_NMF(n_components=15)
-pl.figure()
-for idx,mm in enumerate(sp):
-    pl.subplot(6,5,idx+1)
-    pl.imshow(mm,cmap=pl.cm.gray)
-#%%
+scipy.io.savemat('output_nmf.mat',{'traces':traces,'comps':X1})
+
+#%% ONLINE NMF ########################################################################################################################
 import spams
 from PIL import Image
 import time
 
-perc=8
+N=0#Y.shape[-1]
+N1=30000
+use_pixels_as_basis=False
+remove_baseline=True # notice: online does not work without removing baseline!
+n_components=15
+
+m=cb.movie(np.transpose(np.array(Y[:,:,N:N1]),[2,0,1]),fr=30)
+m=cb.movie(scipy.ndimage.gaussian_filter(m, sigma=(1,1,1), mode='nearest',truncate=2),fr=30)
+
+# resize movie
+m=m.resize(1,1,.1)
+
+
 myfloat=np.float32
-m1= np.maximum(0,m-np.percentile(m,perc,axis=0))[:]#[:,20:35,20:35].resize(1,1,.05)
+
+if remove_baseline:
+    perc=8
+    m1= np.maximum(0,m-np.percentile(m,perc,axis=0))
+else:
+    m1=m
+
 T,d1,d2=np.shape(m1)
 d=d1*d2
-yr=np.reshape(m1,[T,d],order='F')
-#img_file = 'boat.png'
-#try:
-#    img = Image.open(img_file)
-#except:
-#    print "Cannot load image %s : skipping test" %img_file
-#    
-#I = np.array(img) / 255.
-#if I.ndim == 3:
-#    A = np.asfortranarray(I.reshape((I.shape[0],I.shape[1] * I.shape[2])),dtype = myfloat)
-#    rgb = True
-#else:
-#    A = np.asfortranarray(I,dtype = myfloat)
-#    rgb = False
-#
-#m = 16;n = 16;
-#X = spams.im2col_sliding(A,m,n,rgb)
-#X = X[:,::10]
+
+if use_pixels_as_basis:
+    yr=np.reshape(m1,[T,d],order='F')
+else:
+    yr=np.reshape(m1,[T,d],order='F').T
+
+
 X = np.asfortranarray(yr,dtype = myfloat)
 ########## FIRST EXPERIMENT ###########
 tic = time.time()
-#(U,V) = spams.nmf(X,return_lasso= True,K = 15,numThreads=4,iter = -5)
-(U,V) = spams.nnsc(X,return_lasso=True,K=15,lambda1=100)
+# if you want to use NMF uncomment the following line
+#(U,V) = spams.nmf(X,return_lasso= True,K = n_components,iter = -5)
+#(U,V) = spams.nnsc(X,return_lasso=True,K=n_components,lambda1=100,iter=-5)
 
+# regularizer on space components
+#spams.trainDL(X,return_model = True,D=np.asfortranarray(V.todense().T),posAlpha=True,posD=True,modeD=3,gamma1=.001,lambda1=3000,lambda2=0,mode=spams.spams_wrap.PENALTY,iter=-5)
+if not use_pixels_as_basis:
+    (D,model)=spams.trainDL(X,return_model = True,K=n_components,posAlpha=True,posD=True,modeD=3,gamma1=.001,lambda1=2000,lambda2=0,mode=spams.spams_wrap.PENALTY,iter=-5)
+    U=model['B']
+    V=model['A']
+
+#(U,V) = spams.nnsc(np.asfortranarray(yr.T,dtype = myfloat),return_lasso=True,K=15,lambda1=100,iter=-5)
+#model=dict()
+#model['A']=np.asfortranarray(V.todense().T)
+#model['B']=np.asfortranarray(U)
+#model['iter']=100
+#(D,model) = spams.trainDL(X,return_model = True,D=np.asfortranarray(V.todense().T),posAlpha=True,posD=True,modeD=3,gamma1=.001,lambda1=3000,lambda2=0,mode=spams.spams_wrap.PENALTY,iter=-5)
+
+
+if use_pixels_as_basis:
+    comp=V.todense()
+else:
+    comp=U.T    
+#
+#comp=V.T
 
 tac = time.time()
 t = tac - tic
 pl.figure()
-for idx,mm in enumerate(V):
+for idx,mm in enumerate(comp):
+    pl.subplot(6,6,idx+1)
+    pl.imshow(np.reshape(mm,(d1,d2),order='F'),cmap=pl.cm.gray)
+#%% REALLY ONLINE
+
+batch_size=5000;
+K=15
+lambda1=100
+iter_=2
+A=[]
+B=[]
+for count in range(10):
+    print count
+    for idx in range(0,yr.shape[0],batch_size):
+        fr=yr[idx:idx+batch_size].T    
+        
+        if len(A) == 0:
+            (D,model) = spams.trainDL(X,return_model = True,posAlpha=True,posD=True)
+#            (A,B) = spams.nnsc(np.asfortranarray(fr),return_lasso=True,K=K,lambda1=lambda1,iter=iter_)
+#            (A,B) = spams.nmf(np.asfortranarray(fr),return_lasso=True,K=K,iter=iter_)
+        else:
+            model=dict()
+            model['A']=np.asfortranarray(A)
+            model['B']=np.asfortranarray(B.todense())
+            model['iter']=count*iter_
+            (A,B) = spams.nnsc(np.asfortranarray(fr),return_lasso=True,K=K,lambda1=lambda1,model=model,iter=iter_)
+#            (A,B) = spams.nmf(np.asfortranarray(fr),return_lasso=True,K=K,model=model,iter=iter_)
+
+pl.figure()
+for idx,mm in enumerate(A.T):
     pl.subplot(6,5,idx+1)
-    pl.imshow(np.reshape(mm.todense(),(d1,d2),order='F'),cmap=pl.cm.gray)
+    pl.imshow(np.reshape(mm,(d1,d2),order='F'),cmap=pl.cm.gray)
+
+#(U,model1) = spams.trainDL(X,return_model=True,K=15,lambda1=100)
+#(U,V) = spams.nnsc(X,return_lasso=True,K=15,lambda1=100,model=model1)
+
+
+#%% DO NOT LOOK AT THIS STUFF    ****************************************** STOP!!! ***********************************
+#%% DO NOT LOOK AT THIS STUFF    ****************************************** STOP!!! ***********************************
+#%% DO NOT LOOK AT THIS STUFF    ****************************************** STOP!!! ***********************************
+#%% DO NOT LOOK AT THIS STUFF    ****************************************** STOP!!! ***********************************
+#%% DO NOT LOOK AT THIS STUFF    ****************************************** STOP!!! ***********************************
+#%% DO NOT LOOK AT THIS STUFF    ****************************************** STOP!!! ***********************************
+#%% DO NOT LOOK AT THIS STUFF    ****************************************** STOP!!! ***********************************
+#%% DO NOT LOOK AT THIS STUFF    ****************************************** STOP!!! ***********************************
+#%% DO NOT LOOK AT THIS STUFF    ****************************************** STOP!!! ***********************************
+#%% DO NOT LOOK AT THIS STUFF    ****************************************** STOP!!! ***********************************
+#%% DO NOT LOOK AT THIS STUFF    ****************************************** STOP!!! ***********************************
 
 #%%
 m=cb.movie(np.transpose(np.array(Y[:,:,N:N1]),[2,0,1]),fr=30)
@@ -529,3 +558,128 @@ def estimated_autocorrelation(x):
     assert np.allclose(r, np.array([(x[:n-k]*x[-(n-k):]).sum() for k in range(n)]))
     result = r/(variance*(np.arange(n, 0, -1)))
     return result
+    
+
+
+spikes_mat=[]
+tr=traces[:,10]
+size_chunk=100
+thresh=np.median(tr)+3*np.std(tr)
+for idx in range(len(tr)-size_chunk-1):
+    tr_tmp=tr[idx:idx+size_chunk]
+    if tr_tmp[0]<thresh and tr_tmp[-1]<thresh:     
+        spikes_mat.append(tr_tmp)
+
+
+#%%
+spikes_mat=np.vstack(spikes_mat)
+#pl.imshow(spikes_mat,aspect='auto',interpolation='none')
+alpha=10
+mdl1 = NMF(n_components=50,verbose=True,tol=1e-10,max_iter=500,shuffle=True,alpha=alpha,l1_ratio=1)
+X=mdl1.fit_transform(spikes_mat)
+pl.plot(mdl1.components_.T)
+#%%
+from sklearn.cluster import KMeans
+km=KMeans(50)
+
+X=km.fit_transform(spikes_mat)
+labels=km.labels_
+pl.plot(km.cluster_centers_.T)
+#%%
+
+pl.plot(tr)
+#%%
+#ym=np.median(m,axis=0)
+ym=m.bin_median()
+#ym=np.std(m,axis=0)
+#clahe = cv2.createCLAHE(clipLimit=100., tileGridSize=(11,11))
+guide_filter=np.uint8(255*(ym-np.min(ym))/(np.max(ym)-np.min(ym)))
+#guide_filter=clahe.apply(guide_filter)
+
+mn2=m.copy()
+mn1=m.copy()#.bilateral_blur_2D(diameter=0,sigmaColor=10000,sigmaSpace=0)     
+mn1=mn1.guided_filter_blur_2D(guide_filter,radius=3, eps=0)   
+   
+mn=cb.concatenate([mn1,m],axis=1)
+(mn-np.mean(mn)).play(gain=5.,magnification=4,backend='opencv',fr=300)
+#%% FILTER TESTING FILTER
+pl.imshow(np.mean(Y,axis=-1),cmap=pl.cm.gray)
+#%% BILATERAL FILTER EXAMPLE
+N=10000
+#     
+m=cb.movie(np.transpose(np.array(Y[:,:,:N]),[2,0,1]),fr=30)
+m=m.resize(1,1,.1)
+
+
+mn2=m.copy()
+mn1=m.copy().bilateral_blur_2D(diameter=10,sigmaColor=10000,sigmaSpace=0)     
+
+mn1,shifts,xcorrs, template=mn1.motion_correct()
+mn2=mn2.apply_shifts(shifts)     
+#mn1=cb.movie(np.transpose(np.array(Y_n),[2,0,1]),fr=30)
+mn=cb.concatenate([mn1,m],axis=1)
+(mn-np.mean(mn)).play(gain=2.,magnification=4,backend='opencv',fr=20)    
+#%% EFTYCHIOS METHOD TO SEPARATE PIXELS
+from sklearn.cluster import KMeans
+from sklearn.decomposition import PCA,NMF
+from sklearn.mixture import GMM
+
+Ys=Yr
+thresh_probability=0.5
+num_psd_elms_high_freq=49;
+cl_thr=0.8
+#P.sn = sn(:);
+#fprintf('  done \n');
+psdx = np.sqrt(psx[:,3:]);
+X = psdx[:,1:np.minimum(np.shape(psdx)[1],150)];
+X = X-np.mean(X,axis=1)[:,np.newaxis]#     bsxfun(@minus,X,mean(X,2));     % center
+#X = X/sn[:,np.newaxis]# 
+X = X/np.percentile(X,90,axis=1)[:,np.newaxis]
+
+#X = X/(+1e-5+np.std(X,axis=1)[:,np.newaxis])
+#epsilon=1e-9
+#X = X/(epsilon+np.linalg.norm(X,axis=1,ord=1)[:,np.newaxis])
+
+
+
+pc=PCA(n_components=5)
+cp=pc.fit_transform(X)
+
+#nmf=NMF(n_components=2)
+#nmr=nmf.fit_transform(X)
+
+gmm=GMM(n_components=2)
+Cx=gmm.fit_predict(cp)
+
+L=gmm.predict_proba(cp)
+Cx1=np.vstack([np.mean(X[Cx==0],0),np.mean(X[Cx==1],0)])
+
+ind=np.argmin(np.mean(Cx1[:,-num_psd_elms_high_freq:],axis=1))
+active_pixels = (L[:,ind]>thresh_probability)
+active_pixels = L[:,ind]
+pl.imshow(np.reshape((active_pixels),(d1,d2),order='F'))
+
+#%%
+ff=np.zeros(np.shape(A_or)[-1])
+cl_thr=0.2
+#ff = false(1,size(Am,2));
+for i in range(np.shape(A_or)[-1]):
+    a1 = A_or[:,i]
+    a2 = A_or[:,i]*active_pixels
+    if np.sum(a2**2) >= cl_thr**2*np.sum(a1**2):
+        ff[i] = 1
+
+id_set=1
+cse.utilities.view_patches_bar(Yr,coo_matrix(A_or[:,ff==id_set]),C_or[ff==id_set,:],b2,f2, d1,d2, YrA=YrA[srt[ff==id_set],:])  
+
+
+
+
+#km=KMeans(n_clusters=2)
+#Cx=km.fit_transform(X)
+#Cx=km.fit_transform(cp)
+#Cx=km.cluster_centers_
+#L=km.labels_
+#ind=np.argmin(np.mean(Cx[:,-49:],axis=1))
+#active_pixels = (L==ind)
+#centroids = Cx;
