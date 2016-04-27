@@ -40,19 +40,20 @@ m=cb.load(filename, fr=frameRate,start_time=start_time);
 #%% save movie hdf5 format. fastest
 m.save(filename_hdf5)
 #%% backend='opencv' is much faster
-m.play(fr=100,gain=5.0,magnification=1,backend='pylab')    
+m.play(fr=100,gain=15.0,magnification=1,backend='pylab')    
 #%%
-low_SNR=False
+low_SNR=True
 if low_SNR:
-    N=1000     
+    N=1000000     
     mn1=m.copy().bilateral_blur_2D(diameter=5,sigmaColor=10000,sigmaSpace=0)     
     
     mn1,shifts,xcorrs, template=mn1.motion_correct()
     mn2=mn1.apply_shifts(shifts)     
     #mn1=cb.movie(np.transpose(np.array(Y_n),[2,0,1]),fr=30)
     mn=cb.concatenate([mn1,mn2],axis=1)
-    mn.play(gain=5.,magnification=4,backend='opencv',fr=30)
+
 #%% automatic parameters motion correction
+
 max_shift_h=10; # maximum allowed shifts in y
 max_shift_w=10;  # maximum allowed shifts in x
 m=cb.load(filename_hdf5); 
@@ -75,7 +76,7 @@ pl.ylabel('cross correlation')
 pl.xlabel('Frames')
 
 #%%
-m.play(fr=50,gain=5.0,magnification=1)   
+m.play(fr=50,gain=5.0,magnification=1,backend='opencv')    
 
 #%% IF YOU WANT MORE CONTROL USE THE FOLLOWING
 # motion correct for template purpose. Just use a subset to compute the template

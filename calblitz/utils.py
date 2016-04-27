@@ -154,15 +154,16 @@ def motion_correct_parallel(file_names,fr,template=None,margins_out=0,max_shift_
         else:
             raise Exception('Unknown backend')
         
-     except:   
+    except :   
         
         try:
             if backend is 'ipyparallel':
+                
                 dview.results.clear()       
                 c.purge_results('all')
                 c.purge_everything()
                 c.close()
-        except:
+        except UnboundLocalError as uberr:
 
             print 'could not close client'
 
@@ -186,7 +187,8 @@ def process_movie_parallel(arg_in):
     fname,fr,margins_out,template,max_shift_w, max_shift_h,remove_blanks,apply_smooth=arg_in
     
     with open(fname[:-4]+'.stout', "a") as log:
-        sys.stdout = log
+        
+#        sys.stdout = log
         
     #    import pdb
     #    pdb.set_trace()
@@ -211,6 +213,6 @@ def process_movie_parallel(arg_in):
         print 'deleting'        
         del Yr
         print 'done!'
-        sys.stdout = sys.__stdout__ 
+        #sys.stdout = sys.__stdout__ 
         
     return fname[:-3]        

@@ -24,6 +24,9 @@ import cPickle as cpk
 from scipy.io import loadmat
 from matplotlib import animation
 import pylab as pl
+from skimage.external.tifffile import imread
+
+#from ca_source_extraction.utilities import save_memmap,load_memmap
 
 try:
     plt.ion()
@@ -100,7 +103,7 @@ class movie(ts.timeseries):
         '''
         
         # adjust the movie so that valuse are non negative  
-        
+
         min_val=np.min(np.mean(self,axis=0))
         self=self-min_val
         
@@ -943,21 +946,28 @@ def load(file_name,fr=None,start_time=0,meta_data=None,subindices=None,shape=Non
         name,extension = os.path.splitext(file_name)[:2]
 
         if extension == '.tif': # load avi file
+            print('Loading tif...')
+            if subindices is not None:
+                input_arr=imread(file_name)[subindices,:,:]
+            else:
+                input_arr=imread(file_name)
             
-            with pims.open(file_name) as f:
-                if len(f.frame_shape)==3:
-                    for ext_fr in f:
-                        if subindices is None:
-                            input_arr = np.array(ext_fr)    
-                        else:
-                            input_arr = np.array([ext_fr[j] for j in subindices])
-                elif len(f.frame_shape)==2:                    
-                        if subindices is None:
-                            input_arr = np.array(f)    
-                        else:
-                            input_arr = np.array([f[j] for j in subindices])
-                else:
-                    raise Exception('The input file has an unknown numberof dimensions')
+            input_arr=np.squeeze(input_arr)
+            
+#            with pims.open(file_name) as f:
+#                if len(f.frame_shape)==3:
+#                    for ext_fr in f:
+#                        if subindices is None:
+#                            input_arr = np.array(ext_fr)    
+#                        else:
+#                            input_arr = np.array([ext_fr[j] for j in subindices])
+#                elif len(f.frame_shape)==2:                    
+#                        if subindices is None:
+#                            input_arr = np.array(f)    
+#                        else:
+#                            input_arr = np.array([f[j] for j in subindices])
+#                else:
+#                    raise Exception('The input file has an unknown numberof dimensions')
                     
             # necessary for the way pims work with tiffs      
 #            input_arr = input_arr[:,::-1,:]
