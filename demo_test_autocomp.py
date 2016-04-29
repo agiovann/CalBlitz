@@ -80,13 +80,13 @@ Yr3.save('patch_sue.tif')
 pl.imshow(np.mean(Yr3,0),cmap=pl.cm.gray)
 #%% LOAD MOVIE AND MAKE DIMENSIONS COMPATIBLE WITH CNMF
 reload=0
-filename='patch_sue.tif'
+#filename='patch_sue.tif'
 #filename='patch_1.tif'
 #filename='patch_2.tif'
 #filename='PCsforPC.tif'
 #filename='demoMovie.tif'
 #filename='PCsforPC.tif'
-#filename='movies/demoMovie.tif'
+filename='demoMovie.tif'
 t = tifffile.TiffFile(filename) 
 Yr = t.asarray().astype(dtype=np.float32) 
 #Yr=Yr[-3000:,:]
@@ -146,19 +146,22 @@ use_pixels_as_basis=True
 #sue ann
 remove_baseline=True
 alpha= 10e2
+
 n_components=20
-perc=.00001 #PC 
+
 
 
 # patch_1.tif  
 #alpha= 10e2
 #n_components=15
 #remove_baseline=False
+#perc=.00001 #PC 
 
 # demoMovie.tif
-#alpha= 200e2
-#n_components=15
-
+alpha= 500e2
+n_components=30
+perc=50
+remove_baseline=False
 # PC
 #alpha= 5e2
 #n_components=50
@@ -169,8 +172,7 @@ perc=.00001 #PC
 
 
 
-if remove_baseline:
-      
+if remove_baseline:      
     m1= np.maximum(0,m-np.percentile(m,perc,axis=0))
 else:
     m1=m
@@ -265,24 +267,20 @@ import time
 
 N=0#Y.shape[-1]
 N1=30000
-use_pixels_as_basis=False
-remove_baseline=True # notice: online does not work without removing baseline!
-n_components=15
+use_pixels_as_basis=True
+#remove_baseline=True # notice: online does not work without removing baseline!
+#n_components=30
 
-m=cb.movie(np.transpose(np.array(Y[:,:,N:N1]),[2,0,1]),fr=30)
-m=cb.movie(scipy.ndimage.gaussian_filter(m, sigma=(1,1,1), mode='nearest',truncate=2),fr=30)
+m1=cb.movie(np.transpose(np.array(Y[:,:,N:N1]),[2,0,1]),fr=30)
+m1=cb.movie(scipy.ndimage.gaussian_filter(m1, sigma=(1,1,0), mode='nearest',truncate=2),fr=30)
+if remove_baseline:  
+    m1= np.maximum(0,m1-np.percentile(m1,perc,axis=0))
 
 # resize movie
-m=m.resize(1,1,.1)
+m=m.resize(1,1,.5)
 
 
 myfloat=np.float32
-
-if remove_baseline:
-    perc=8
-    m1= np.maximum(0,m-np.percentile(m,perc,axis=0))
-else:
-    m1=m
 
 T,d1,d2=np.shape(m1)
 d=d1*d2
@@ -298,15 +296,18 @@ X = np.asfortranarray(yr,dtype = myfloat)
 tic = time.time()
 # if you want to use NMF uncomment the following line
 #(U,V) = spams.nmf(X,return_lasso= True,K = n_components,iter = -5)
-#(U,V) = spams.nnsc(X,return_lasso=True,K=n_components,lambda1=100,iter=-5)
 
 # regularizer on space components
 #spams.trainDL(X,return_model = True,D=np.asfortranarray(V.todense().T),posAlpha=True,posD=True,modeD=3,gamma1=.001,lambda1=3000,lambda2=0,mode=spams.spams_wrap.PENALTY,iter=-5)
 if not use_pixels_as_basis:
-    (D,model)=spams.trainDL(X,return_model = True,K=n_components,posAlpha=True,posD=True,modeD=3,gamma1=.001,lambda1=2000,lambda2=0,mode=spams.spams_wrap.PENALTY,iter=-5)
-    U=model['B']
-    V=model['A']
+#    (D,model)=spams.trainDL(X,return_model = True,K=n_components,posAlpha=True,posD=True,modeD=3,gamma1=.001,lambda1=2000,lambda2=0,mode=spams.spams_wrap.PENALTY,iter=-5)
+#    U=model['B']
+#    V=model['A']
+    (U,V) = spams.nnsc(X,return_lasso=True,K=n_components,lambda1=1000,iter=-5)
+else:
+    (U,V) = spams.nnsc(X,return_lasso=True,K=n_components,lambda1=1000,iter=-5)
 
+    
 #(U,V) = spams.nnsc(np.asfortranarray(yr.T,dtype = myfloat),return_lasso=True,K=15,lambda1=100,iter=-5)
 #model=dict()
 #model['A']=np.asfortranarray(V.todense().T)
@@ -331,32 +332,42 @@ for idx,mm in enumerate(comp):
 #%% REALLY ONLINE
 
 batch_size=5000;
-K=15
-lambda1=100
-iter_=2
+K=30
+lambda1=1000
+iter_=1
 A=[]
 B=[]
-for count in range(10):
-    print count
+total_iter=0
+for count in range(1):
+    print total_iter
     for idx in range(0,yr.shape[0],batch_size):
-        fr=yr[idx:idx+batch_size].T    
+        total_iter+=batch_size
+        fr=yr[idx:idx+batch_size]    
         
         if len(A) == 0:
-            (D,model) = spams.trainDL(X,return_model = True,posAlpha=True,posD=True)
-#            (A,B) = spams.nnsc(np.asfortranarray(fr),return_lasso=True,K=K,lambda1=lambda1,iter=iter_)
+#            (D,model) = spams.trainDL(X,K=K,return_model = True,posAlpha=True,posD=True,lambda1=lambda1,iter=1)
+#            A=D
+            (A,B) = spams.nnsc(np.asfortranarray(fr),return_lasso=True,K=K,lambda1=lambda1,iter=iter_)
 #            (A,B) = spams.nmf(np.asfortranarray(fr),return_lasso=True,K=K,iter=iter_)
         else:
             model=dict()
             model['A']=np.asfortranarray(A)
             model['B']=np.asfortranarray(B.todense())
-            model['iter']=count*iter_
+            model['iter']=count
             (A,B) = spams.nnsc(np.asfortranarray(fr),return_lasso=True,K=K,lambda1=lambda1,model=model,iter=iter_)
 #            (A,B) = spams.nmf(np.asfortranarray(fr),return_lasso=True,K=K,model=model,iter=iter_)
 
+if use_pixels_as_basis:
+    comp=B.todense()
+else:
+    comp=A.T   
+
+
 pl.figure()
-for idx,mm in enumerate(A.T):
-    pl.subplot(6,5,idx+1)
-    pl.imshow(np.reshape(mm,(d1,d2),order='F'),cmap=pl.cm.gray)
+for idx,mm in enumerate(comp):
+    pl.subplot(6,6,idx+1)
+    pl.imshow(np.reshape(mm,(d1,d2),order='F'),cmap=pl.cm.gray) 
+
 
 #(U,model1) = spams.trainDL(X,return_model=True,K=15,lambda1=100)
 #(U,V) = spams.nnsc(X,return_lasso=True,K=15,lambda1=100,model=model1)
