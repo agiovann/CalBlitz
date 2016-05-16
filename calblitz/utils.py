@@ -17,6 +17,7 @@ from IPython.display import HTML
 import calblitz as cb
 import numpy as np
 from ipyparallel import Client
+import os
 #%%
 def playMatrix(mov,gain=1.0,frate=.033):
     for frame in mov: 
@@ -137,9 +138,18 @@ def motion_correct_parallel(file_names,fr,template=None,margins_out=0,max_shift_
         
     try:
         
-        if backend is 'ipyparallel':
-            
-            c = Client()   
+        if backend is 'ipyparallel' or backend=='SLURM':
+            if backend is 'SLURM':
+                if 'IPPPDIR' in os.environ and 'IPPPROFILE' in os.environ:
+                    pdir, profile = os.environ['IPPPDIR'], os.environ['IPPPROFILE']
+                else:
+                    raise Exception('envirnomment variables not found, please source slurmAlloc.rc')
+        
+                c = Client(ipython_dir=pdir, profile=profile)
+                print 'Using '+ str(len(c)) + ' processes'
+            else:
+                c = Client()
+
             dview=c[:]
             file_res = dview.map_sync(process_movie_parallel, args_in)                         
             dview.results.clear()       
