@@ -81,12 +81,13 @@ pl.imshow(np.mean(Yr3,0),cmap=pl.cm.gray)
 #%% LOAD MOVIE AND MAKE DIMENSIONS COMPATIBLE WITH CNMF
 reload=0
 #filename='patch_sue.tif'
-#filename='patch_1.tif'
+#filename='patch.tif'
 #filename='patch_2.tif'
 #filename='PCsforPC.tif'
 #filename='demoMovie.tif'
 #filename='PCsforPC.tif'
 filename='demoMovie.tif'
+#filename='selmanExample.tif'
 t = tifffile.TiffFile(filename) 
 Yr = t.asarray().astype(dtype=np.float32) 
 #Yr=Yr[-3000:,:]
@@ -124,7 +125,7 @@ m=cb.movie(np.transpose(np.array(Y[:,:,N:N1]),[2,0,1]),fr=30)
 m=cb.movie(scipy.ndimage.gaussian_filter(m, sigma=(1,1,1), mode='nearest',truncate=2),fr=30)
 
 # resize movie
-m=m.resize(1,1,.5)
+m=m.resize(1,1,.2)
 (m-np.mean(m)).play(gain=10.,magnification=4,backend='opencv',fr=20)
 #%% ONLINE NMF USING CALBLITZ
 #perc=8
@@ -146,19 +147,19 @@ use_pixels_as_basis=True
 #sue ann
 remove_baseline=True
 alpha= 10e2
-
-n_components=20
+n_components=30
 
 
 
 # patch_1.tif  
-#alpha= 10e2
-#n_components=15
+#alpha= 20e2
+#n_components=8
 #remove_baseline=False
 #perc=.00001 #PC 
 
 # demoMovie.tif
-alpha= 500e2
+
+alpha= 50e2
 n_components=30
 perc=50
 remove_baseline=False
@@ -190,20 +191,25 @@ else:
     yr=np.reshape(m1,[T,d],order='F').T
 
 
-
-X=mdl.fit(yr)
+#yr=-scipy.linalg.toeplitz(np.concatenate([np.array([1,-.9]),np.zeros(398)])).dot(yr)
+#yr=yr-np.min(yr)
 
 if use_pixels_as_basis:
+    C=mdl.fit_transform(yr)
     X=mdl.components_.T   
 else:
-    X=mdl.transform(yr)
+    X=mdl.fit_transform(yr)
+    C=mdl.components_.T   
+    
 
 
 
 pl.figure()
 for idx,mm in enumerate(X.T):
-    pl.subplot(7,7,idx+1)
-    pl.imshow(np.reshape(mm,(d1,d2),order='F'),cmap=pl.cm.gray,vmin=np.percentile(mm,1),vmax=np.percentile(mm,99))
+    pl.subplot(5,6,idx+1)
+    pl.imshow(np.reshape(mm,(d1,d2),order='F'),cmap=pl.cm.gray,vmin=np.percentile(mm,1),vmax=np.percentile(mm,98))
+#%%
+np.savez('res_auto_comp.npz',X=X,C=C,d1=d1,d2=d2,mdl=mdl)    
 #%% NOW RELOAD ORIGINAL MOVIE AND APPLY NMF INITIALIZING WITH VALUES COMPUTED ON DOWNSAMPLED VERSION
 if not use_pixels_as_basis:
     raise Exception('You cannot reuse spatial basis since you are using traces as basis')
@@ -220,6 +226,7 @@ d=d1*d2
 yr=np.reshape(m1,[T,d],order='F')
 
 # FIT USING THE PREVIOUSLY COMPUTED FACTORIZATION
+print ('Fitting....')
 H=mdl.transform(yr)
 
 # RUN AGAIN NMF INITIALIZING WITH THE COMPONENTS PREVIOUSLY COMPUTED
