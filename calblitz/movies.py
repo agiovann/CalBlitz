@@ -8,8 +8,6 @@ author: agiovann
 import cv2
 import os
 import sys
-import copy
-import pims
 import scipy.ndimage
 import scipy
 import sklearn
@@ -827,12 +825,14 @@ class movie(ts.timeseries):
             raise Exception('Method not implemented')
         pl.imshow(zp,cmap=cmap,aspect=aspect,**kwargs)
         return zp
-        
+    
+    
+    
     def local_correlations_movie(self,window=10):
         [T,d1,d2]=self.shape
         return movie(np.concatenate([self[j:j+window,:,:].local_correlations(eight_neighbours=True)[np.newaxis,:,:] for j in range(T-window)],axis=0),fr=self.fr)    
     
-    def play(self,gain=1,fr=None,magnification=1,offset=0,interpolation=cv2.INTER_LINEAR,backend='pylab'):
+    def play(self,gain=1,fr=None,magnification=1,offset=0,interpolation=cv2.INTER_LINEAR,backend='pylab',do_loop=False):
          """
          Play the movie using opencv
          
@@ -877,38 +877,53 @@ class movie(ts.timeseries):
          
          if fr==None:
             fr=self.fr
-            
-         for iddxx,frame in enumerate(self):
-            if backend is 'opencv':
-                if magnification != 1:
-                    frame = cv2.resize(frame,None,fx=magnification, fy=magnification, interpolation = interpolation)
+         
+         looping=True
+
+         terminated=False
+         
+         while looping:
+
+             for iddxx,frame in enumerate(self):
+                if backend is 'opencv':
+                    if magnification != 1:
+                        frame = cv2.resize(frame,None,fx=magnification, fy=magnification, interpolation = interpolation)
+                        
+                    cv2.imshow('frame',(offset+frame)*gain/maxmov)
+                    if cv2.waitKey(int(1./fr*1000)) & 0xFF == ord('q'):
+                        cv2.destroyAllWindows()
+                        looping=False
+                        terminated=True
+                        break  
+                       
                     
-                cv2.imshow('frame',(offset+frame)*gain/maxmov)
-                if cv2.waitKey(int(1./fr*1000)) & 0xFF == ord('q'):
-                    cv2.destroyAllWindows()
-                    break  
-                   
-                
-            elif backend is 'pylab':
-
-                im.set_data((offset+frame)*gain/maxmov)
-                ax.set_title( str( iddxx ) )
-                plt.axis('off')
-                fig.canvas.draw()
-                plt.pause(1./fr*.5) 
-                ev=plt.waitforbuttonpress(1./fr*.5)
-                if ev is not None:                                    
-                    plt.close()
+                elif backend is 'pylab':
+    
+                    im.set_data((offset+frame)*gain/maxmov)
+                    ax.set_title( str( iddxx ) )
+                    plt.axis('off')
+                    fig.canvas.draw()
+                    plt.pause(1./fr*.5) 
+                    ev=plt.waitforbuttonpress(1./fr*.5)
+                    if ev is not None:                                    
+                        plt.close()
+                        break
+                    
+                elif backend is 'notebook':
+    
+                    print 'Animated via MP4'
                     break
-                
-            elif backend is 'notebook':
-
-                print 'Animated via MP4'
+    
+                else:
+                    
+                    raise Exception('Unknown backend!')
+                    
+             if terminated:
                 break
 
-            else:
-                
-                raise Exception('Unknown backend!')
+             if do_loop:
+                looping=True
+                    
         
          if backend is 'opencv':
             cv2.destroyAllWindows()
@@ -1040,7 +1055,14 @@ def load(file_name,fr=None,start_time=0,meta_data=None,subindices=None,shape=Non
                     return movie(f['mov'],**attrs)   
                 else:
                     return movie(f['mov'][subindices],**attrs)         
-
+        elif extension == '.mmap':
+            
+            filename=os.path.split(file_name)[-1]
+            fpart=filename.split('_')[1:-1]
+            d1,d2,T,order=int(fpart[1]),int(fpart[3]),int(fpart[7]),fpart[5]
+            Yr=np.memmap(filename,mode='r',shape=(d1*d2,T),dtype=np.float32,order=order)
+            
+            return movie(to_3D(np.array(Yr).T,(T,d1,d2)),fr=fr)
         else:
             raise Exception('Unknown file type')    
     else:
@@ -1071,7 +1093,7 @@ def to_3D(mov2D,shape,order='F'):
     """
     transform to 3D a vectorized movie
     """
-    return np.reshape(mov2D,shape,order=order) 
+    return np.reshape(mov2D,shape,order=order)   
 
         
              
