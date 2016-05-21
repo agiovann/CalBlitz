@@ -79,7 +79,7 @@ def compute_optical_flow(m,mask,polar_coord=True,do_show=False,do_write=False,fi
         cv2.namedWindow( "frame2", cv2.WINDOW_NORMAL )
     
     
-    
+    data = np.zeros(np.shape(m[0]), dtype=np.int32)
     T,d1,d2=m.shape
     angs=np.zeros(T)
     mags=np.zeros(T)
@@ -142,7 +142,7 @@ def compute_optical_flow(m,mask,polar_coord=True,do_show=False,do_write=False,fi
 
 
 #%% NMF
-def extract_components(mov_tot,n_components=6,normalize_std=True):
+def extract_components(mov_tot,n_components=6,normalize_std=True,**kwargs):
     """
     From optical flow images can extract spatial and temporal components
     
@@ -182,16 +182,19 @@ def extract_components(mov_tot,n_components=6,normalize_std=True):
             norm_fact=np.array([ 1.,  1.])
             
         c,T,d1,d2=np.shape(mov_tot)
+        newm=np.concatenate([mov_tot[0,:,:,:],mov_tot[1,:,:,:]],axis=0)
+        
     else:
+        norm_fact=1
+        normalize_std=False
         T,d1,d2=np.shape(mov_tot)
         c=1
             
     tt=time.time()    
    
-    nmf=NMF(n_components=n_components)
-    
-    newm=np.concatenate([mov_tot[0,:,:,:],mov_tot[1,:,:,:]],axis=0)
+    nmf=NMF(n_components=n_components,**kwargs)
     newm=np.reshape(mov_tot,(c*T,d1*d2),order='C') 
+    
     time_trace=nmf.fit_transform(newm)
     spatial_filter=nmf.components_
     
