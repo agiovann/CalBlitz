@@ -14,7 +14,7 @@ import cv2
 from sklearn.decomposition import NMF,PCA
 import time
 #%% dense flow
-def select_roi(img):
+def select_roi(img,n_rois=1):
     """
     Create a mask from a the convex polygon enclosed between selected points
     
@@ -22,22 +22,28 @@ def select_roi(img):
     ----------
     img: 2D ndarray
         image used to select the points for the mask
-    
+    n_rois: int
+        number of rois to select
     
     Returns
     -------
-    mask: ndarray
-        the mask
+    mask: list
+        each element is an the mask considered a ROIs
     """
-    fig=pl.figure()
-    pl.imshow(img,cmap=pl.cm.gray)
-    pts = fig.ginput(0, timeout=0)
-    mask = np.zeros(np.shape(m[0]), dtype=np.int32)
-    pts = np.asarray(pts, dtype=np.int32)
-    cv2.fillConvexPoly(mask, pts, (1,1,1), lineType=cv2.LINE_AA)
-    #data=np.float32(data)
-    pl.close()
-    return mask
+    
+    masks=[];
+    for n in range(n_rois):
+        fig=pl.figure()
+        pl.imshow(img,cmap=pl.cm.gray)
+        pts = fig.ginput(0, timeout=0)
+        mask = np.zeros(np.shape(img), dtype=np.int32)
+        pts = np.asarray(pts, dtype=np.int32)
+        cv2.fillConvexPoly(mask, pts, (1,1,1), lineType=cv2.LINE_AA)
+        masks.append(mask)
+        #data=np.float32(data)
+        pl.close()
+        
+    return masks
 #%%
 def compute_optical_flow(m,mask,polar_coord=True,do_show=False,do_write=False,file_name=None,frate=30,pyr_scale=.1,levels=3 , winsize=25,iterations=3,poly_n=7,poly_sigma=1.5):
     """
