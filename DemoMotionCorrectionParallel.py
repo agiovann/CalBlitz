@@ -45,7 +45,7 @@ print fnames
 #%%
 fnames=['./movies/demoMovie_PC.tif']
 #%%
-n_processes = 3#np.maximum(psutil.cpu_count() - 2,1) # roughly number of cores on your machine minus 1
+n_processes = 4#np.maximum(psutil.cpu_count() - 2,1) # roughly number of cores on your machine minus 1
 #print 'using ' + str(n_processes) + ' processes'
 p=2 # order of the AR model (in general 1 or 2)
 print "Stopping  cluster to avoid unnencessary use of memory...."
@@ -65,26 +65,26 @@ cse.utilities.start_server(n_processes)
 #    mn.play(gain=5.,magnification=4,backend='opencv',fr=30)
 #%%
 t1 = time()
-file_res=cb.motion_correct_parallel(fnames[:-3],fr=30,template=None,margins_out=0,max_shift_w=45, max_shift_h=45,backend='ipyparallel',apply_smooth=True)
+file_res=cb.motion_correct_parallel(fnames,fr=30,template=None,margins_out=0,max_shift_w=45, max_shift_h=45,backend='ipyparallel',apply_smooth=True)
 t2=time()-t1
 print t2
 #%%   
 all_movs=[]
-for f in  file_res:
-    with np.load(f+'npz') as fl:
+for f in  fnames:
+    with np.load(f[:-3]+'npz') as fl:
         pl.subplot(1,2,1)
         pl.imshow(fl['template'],cmap=pl.cm.gray)
         pl.subplot(1,2,2)
         pl.plot(fl['shifts'])       
         all_movs.append(fl['template'][np.newaxis,:,:])
-        pl.pause(2)
+        pl.pause(.5)
         pl.cla()
 #%%        
 all_movs=cb.movie(np.concatenate(all_movs,axis=0),fr=10)
 all_movs,shifts,_,_=all_movs.motion_correct(template=np.median(all_movs,axis=0))
 template=np.median(all_movs,axis=0)
 np.save('template_total',template)
-#pl.imshow(template,cmap=pl.cm.gray,vmax=100)
+pl.imshow(template,cmap=pl.cm.gray,vmax=100)
 #%%
 file_res=cb.motion_correct_parallel(fnames,40,template=template,margins_out=0,max_shift_w=25, max_shift_h=25,remove_blanks=False)
 #%%
@@ -129,4 +129,4 @@ d,T=Yr.shape
 Y=np.reshape(Yr,(d1,d2,T),order='F')
 Y=cb.movie(np.array(np.transpose(Y,(2,0,1))),fr=30)
 #%%
-Y.play(backend='opencv',fr=30,gain=10,magnification=1)
+Y.play(backend='opencv',fr=300,gain=10,magnification=1)
