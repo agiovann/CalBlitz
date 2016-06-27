@@ -348,7 +348,7 @@ class movie(ts.timeseries):
             raise ValueError("All pixels must be positive")
 
         numFrames,linePerFrame,pixPerLine=np.shape(self)
-        downsampfact=int(secsWindow*1.*self.fr);
+        downsampfact=int(secsWindow*1./self.fr);
         elm_missing=int(np.ceil(numFrames*1.0/downsampfact)*downsampfact-numFrames)
         padbefore=int(np.floor(elm_missing/2.0))
         padafter=int(np.ceil(elm_missing/2.0))
@@ -372,7 +372,7 @@ class movie(ts.timeseries):
         elif method == 'delta_f_over_f':
             self=(self-movBL)/movBL
         elif method  =='only_baseline':
-            self=(self-movBL)/movBL
+            self=(self-movBL)
         else:
             raise Exception('Unknown method')
             
