@@ -1081,6 +1081,8 @@ def load_movie_chain(file_list,fr=None,start_time=0,meta_data=None,subindices=No
     mov=[];    
     for f in file_list:
         m=load(f,fr=fr,start_time=start_time,meta_data=meta_data,subindices=subindices);
+        if m.ndim==2:        
+            m=m[np.newaxis,:,:]
         tm,h,w=np.shape(m)
         m=m[:,top:h-bottom,left:w-right]
         mov.append(m)
