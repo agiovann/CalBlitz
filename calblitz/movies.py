@@ -1059,10 +1059,11 @@ def load(file_name,fr=None,start_time=0,meta_data=None,subindices=None,shape=Non
             
             filename=os.path.split(file_name)[-1]
             fpart=filename.split('_')[1:-1]
-            d1,d2,T,order=int(fpart[1]),int(fpart[3]),int(fpart[7]),fpart[5]
+            d1,d2,d3,T,order=int(fpart[1]),int(fpart[3]),int(fpart[5]),int(fpart[9]),fpart[7]
             Yr=np.memmap(filename,mode='r',shape=(d1*d2,T),dtype=np.float32,order=order)
+            print 'mmap'
             
-            return movie(to_3D(np.array(Yr).T,(T,d1,d2)),fr=fr)
+            return movie(to_3D(np.array(Yr).T,(T,d1,d2),order=order),fr=fr)
         else:
             raise Exception('Unknown file type')    
     else:
