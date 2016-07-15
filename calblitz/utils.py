@@ -117,8 +117,88 @@ def display_animation(anim,fps=20):
     plt.close(anim._fig)
     return HTML(anim_to_html(anim,fps=fps))    
 
+def apply_function_per_movie_cluster(client_,function_name,args):
+    """ use ipyparallel and SLURM to apply the same function on several datasets
+    Parameters:
+    -----------
+    client_: pointer to ipyparallel client
+        
+    file_names: str
+        list of file names
+    function_name: handle
+        name of function to apply
+
+    args: list
+        arguments to pass to function
+    
+    Returns:
+    -------
+    
+    file_res: list 
+        containing outputs
+    """
+    
+    
+    
+    return file_res
+
+def pre_preprocess_movie_labeling(dview, file_names, median_filter_size=(2,1,1), 
+                                  resize_factors=[.2,.1666666666],diameter_bilateral_blur=4):
+   def pre_process_handle(args):
+#        import calblitz as cb 
+        
+        from scipy.ndimage import filters as ft
+        import logging
+        
+        fil, resize_factors, diameter_bilateral_blur,median_filter_size=args
+        
+        name_log=fil[:-4]+ '_LOG'
+        logger = logging.getLogger(name_log)
+        hdlr = logging.FileHandler(name_log)
+        formatter = logging.Formatter('%(asctime)s %(levelname)s %(message)s')
+        hdlr.setFormatter(formatter)
+        logger.addHandler(hdlr) 
+        logger.setLevel(logging.INFO)
+
+        logger.info('START')
+        logger.info(fil)
+        mov=cb.load(fil,fr=30)
+        logger.info('Read file')
+
+        mov=mov.resize(1,1,resize_factors[0])
+        logger.info('Resize')
+        mov=mov.bilateral_blur_2D(diameter=diameter_bilateral_blur)
+        logger.info('Bilateral')
+        mov1=cb.movie(ft.median_filter(mov,median_filter_size),fr=30)
+        logger.info('Median filter')
+        #mov1=mov1-np.median(mov1,0)
+        mov1=mov1.resize(1,1,resize_factors[1])
+        logger.info('Resize 2')
+        mov1=mov1-cb.utils.mode_robust(mov1,0)
+        logger.info('Mode')
+        mov=mov.resize(1,1,resize_factors[1])
+        logger.info('Resize')
+#        mov=mov-np.percentile(mov,1)
+        
+        mov.save(fil[:-4] + '_compress_.tif')
+        logger.info('Save 1')
+        mov1.save(fil[:-4] + '_BL_compress_.tif')
+        logger.info('Save 2')
+        return 1
+        
+   args=[]
+   for name in file_names:
+            args.append([name,resize_factors,diameter_bilateral_blur,median_filter_size])
+            
+    
+   file_res = dview.map_sync(pre_process_handle, args)                         
+   dview.results.clear()       
+
+        
+   return file_res
+    
 #%%
-def motion_correct_parallel(file_names,fr,template=None,margins_out=0,max_shift_w=5, max_shift_h=5,remove_blanks=False,apply_smooth=True,backend='single_thread'):
+def motion_correct_parallel(file_names,fr,template=None,margins_out=0,max_shift_w=5, max_shift_h=5,remove_blanks=False,apply_smooth=True,dview=None):
     """motion correct many movies usingthe ipyparallel cluster
     Parameters
     ----------
@@ -139,41 +219,37 @@ def motion_correct_parallel(file_names,fr,template=None,margins_out=0,max_shift_
         
     try:
         
-        if backend is 'ipyparallel' or backend=='SLURM':
-            if backend is 'SLURM':
-                if 'IPPPDIR' in os.environ and 'IPPPROFILE' in os.environ:
-                    pdir, profile = os.environ['IPPPDIR'], os.environ['IPPPROFILE']
-                else:
-                    raise Exception('envirnomment variables not found, please source slurmAlloc.rc')
-        
-                c = Client(ipython_dir=pdir, profile=profile)
-                print 'Using '+ str(len(c)) + ' processes'
-            else:
-                c = Client()
+        if dview is not None:
+#            if backend is 'SLURM':
+#                if 'IPPPDIR' in os.environ and 'IPPPROFILE' in os.environ:
+#                    pdir, profile = os.environ['IPPPDIR'], os.environ['IPPPROFILE']
+#                else:
+#                    raise Exception('envirnomment variables not found, please source slurmAlloc.rc')
+#        
+#                c = Client(ipython_dir=pdir, profile=profile)
+#                print 'Using '+ str(len(c)) + ' processes'
+#            else:
+#                c = Client()
 
-            dview=c[:]
+
             file_res = dview.map_sync(process_movie_parallel, args_in)                         
             dview.results.clear()       
-            c.purge_results('all')
-            c.purge_everything()
-            c.close()    
 
-        elif backend is 'single_thread':
+            
+
+        else:
             
             file_res = map(process_movie_parallel, args_in)        
                  
-        else:
-            raise Exception('Unknown backend')
+        
         
     except :   
         
         try:
-            if backend is 'ipyparallel':
+            if dview is not None:
                 
                 dview.results.clear()       
-                c.purge_results('all')
-                c.purge_everything()
-                c.close()
+
         except UnboundLocalError as uberr:
 
             print 'could not close client'
@@ -182,7 +258,59 @@ def motion_correct_parallel(file_names,fr,template=None,margins_out=0,max_shift_
                                     
     return file_res
 
+#%%
+def mode_robust(inputData, axis=None, dtype=None):
+    """
+    Robust estimator of the mode of a data set using the half-sample mode.
 
+    .. versionadded: 1.0.3
+    """
+    import numpy
+    if axis is not None:
+        fnc = lambda x: mode_robust(x, dtype=dtype)
+        dataMode = numpy.apply_along_axis(fnc, axis, inputData)
+    else:
+        # Create the function that we can use for the half-sample mode
+        def _hsm(data):
+            if data.size == 1:
+                return data[0]
+            elif data.size == 2:
+                return data.mean()
+            elif data.size == 3:
+                i1 = data[1] - data[0]
+                i2 = data[2] - data[1]
+                if i1 < i2:
+                    return data[:2].mean()
+                elif i2 > i1:
+                    return data[1:].mean()
+                else:
+                    return data[1]
+            else:
+
+                #            wMin = data[-1] - data[0]
+                wMin = np.inf
+                N = data.size / 2 + data.size % 2
+                for i in xrange(0, N):
+                    w = data[i + N - 1] - data[i]
+                    if w < wMin:
+                        wMin = w
+                        j = i
+
+                return _hsm(data[j:j + N])
+
+        data = inputData.ravel()
+        if type(data).__name__ == "MaskedArray":
+            data = data.compressed()
+        if dtype is not None:
+            data = data.astype(dtype)
+
+        # The data need to be sorted for this to work
+        data = numpy.sort(data)
+
+        # Find the mode
+        dataMode = _hsm(data)
+
+    return dataMode
     
 def process_movie_parallel(arg_in):
 #    import calblitz
