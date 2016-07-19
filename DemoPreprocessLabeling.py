@@ -38,29 +38,111 @@ import glob
 from ipyparallel import Client
 import os
 import glob
+import h5py
+import re
+#%% Sue Ann create data for labeling
+diameter_bilateral_blur=4
+median_filter_size=(2,1,1)
+from scipy.ndimage import filters as ft
+res=[]
+with open('file_list.txt') as f:
+    for ln in f:
+        print(ln[:-1])
+        with  h5py.File(ln[:-1]) as hh:
+            print hh.keys()
+            mov=np.array(hh['binnedF'],dtype=np.float32)
+            mov=cb.movie(mov,fr=3)
+            mov=mov.bilateral_blur_2D(diameter=diameter_bilateral_blur)
+            mov1=cb.movie(ft.median_filter(mov,median_filter_size),fr=3)
+            #mov1=mov1-np.median(mov1,0)
+            mov1=mov1.resize(1,1,.3)
+            mov1=mov1-cb.utils.mode_robust(mov1,0)
+            mov=mov.resize(1,1,.3)
+    #        mov=mov-np.percentile(mov,1)
+            
+            mov.save(ln[:-4] + '_compress_.tif')
+            mov1.save(ln[:-4] + '_BL_compress_.tif')
+            
+            res.append(ln[:-4] + '_compress_.tif')
+            res.append(ln[:-4] + '_BL_compress_.tif')
+            
+#%% Create images for Labeling
+from glob import glob
+import scipy.stats as st
+import calblitz as cb
+import numpy as np            
+for fl  in res:            
+    print(fl) 
+    m=cb.load(fl,fr=3)
+    
+    img=m.local_correlations(eight_neighbours=True)
+    im=cb.movie(img,fr=1)
+    im.save(fl[:-4]+'correlation_image.tif')
+    
+    m=np.array(m)
+
+    img=st.skew(m,0)
+    im=cb.movie(img,fr=1)
+    im.save(fl[:-4]+'skew.tif')
+    
+    img=st.kurtosis(m,0)
+    im=cb.movie(img,fr=1)
+    im.save(fl[:-4]+'kurtosis.tif')
+    
+    img=np.std(m,0)
+    im=cb.movie(img,fr=1)
+    im.save(fl[:-4]+'std.tif')
+    
+    img=np.median(m,0)
+    im=cb.movie(img,fr=1)
+    im.save(fl[:-4]+'median.tif')
+    
+    
+    img=np.max(m,0)
+    im=cb.movie(img,fr=1)
+    im.save(fl[:-4]+'max.tif')
+#%% create and save tail probability image
+from scipy.io import loadmat
+idxChunk=0
+
+with open('file_list.txt') as f:
+    for ln in f:
+        nf=ln[:-19]+'.proto-roi.mat'
+        print(nf)            
+        c=loadmat(nf)        
+        tailImg=c['prototypes']['metric'][0,idxChunk]['tailProb'][0][0]        
+        cb.movie(tailImg,fr=1).save(ln[:-13]+'_compress_tail_img.tif')
+
+    
 #%% LOGIN TO MASTER NODE
 # TYPE salloc -n n_nodes --exclusive
 # source activate environment_name
+
 #%%#%%
 slurm_script='/mnt/xfs1/home/agiovann/SOFTWARE/Constrained_NMF/SLURM/slurmStart.sh'
-cse.utilities.start_server(ncpus=None,slurm_script=slurm_script)
+cse.utilities.start_server(slurm_script=slurm_script)
 #n_processes = 27#np.maximum(psutil.cpu_count() - 2,1) # roughly number of cores on your machine minus 1
 pdir, profile = os.environ['IPPPDIR'], os.environ['IPPPROFILE']
 client_ = Client(ipython_dir=pdir, profile=profile)
+dview=client_[::2]
 print 'Using '+ str(len(client_)) + ' processes'
-
+#%% no server
+if 0:
+    dview=None
 #%%
 import os
 fnames=[]
-base_folder='/mnt/ceph/users/agiovann/ImagingData/LABELLING/SueAnn/k31/20160109/'
-for file_ in glob.glob(base_folder+'k31_20160109_MMP_400um_118mW_zoom2p2_000*[0-9].tif'):
+base_folder='/mnt/ceph/users/agiovann/ImagingData/LABELLING/Farzaneh/'
+for file_ in glob.glob(base_folder+'151102_001_00*[0-9].tif'):
 #        if not os.path.exists(file_[:-3]+'hdf5'):
             fnames.append(file_)
 fnames.sort()
 print fnames  
 #%% motion correct
+max_shift_w=45
+max_shift_h=45
 t1 = time()
-file_res=cb.motion_correct_parallel(fnames,fr=30,template=None,margins_out=0,max_shift_w=45, max_shift_h=45,dview=client_[::2],apply_smooth=True)
+file_res=cb.motion_correct_parallel(fnames,fr=30,template=None,margins_out=0,max_shift_w=max_shift_w, max_shift_h=max_shift_h,dview=dview,apply_smooth=True)
 t2=time()-t1
 print t2
 #%%   
@@ -77,31 +159,33 @@ for f in  fnames:
 #        pl.cla()
 #%%        
 all_movs=cb.movie(np.concatenate(all_movs,axis=0),fr=10)
-all_movs,shifts,corss,_=all_movs.motion_correct(template=all_movs[1],max_shift_w=45, max_shift_h=45)
+all_movs,shifts,corss,_=all_movs.motion_correct(template=all_movs[1],max_shift_w=max_shift_w, max_shift_h=max_shift_h)
 #%%
 template=np.median(all_movs[:],axis=0)
 np.save(base_folder+'template_total',template)
+#%%
 pl.imshow(template,cmap=pl.cm.gray,vmax=120)
 #%%
-all_movs.play(backend='opencv',gain=5,fr=30)
+all_movs.play(backend='opencv',gain=1,fr=100)
 #%%
 t1 = time()
-file_res=cb.motion_correct_parallel(fnames,30,template=template,margins_out=0,max_shift_w=45, max_shift_h=45,dview=client_[::2],remove_blanks=False)
+file_res=cb.motion_correct_parallel(fnames,30,template=template,margins_out=0,max_shift_w=max_shift_w, max_shift_h=max_shift_h,dview=dview,remove_blanks=False)
 t2=time()-t1
 print t2
 #%%
 fnames=[]
-for file in glob.glob(base_folder+'k31_20160107_MMP_150um_65mW_zoom2p2_000*[0-9].hdf5'):
+for file in glob.glob(base_folder+'15*[0-9].hdf5'):
         fnames.append(file)
 fnames.sort()
 print fnames  
 #%%
-file_res=cb.utils.pre_preprocess_movie_labeling(client_[::2], fnames, median_filter_size=(2,1,1), 
-                                  resize_factors=[.2,.1666666666],diameter_bilateral_blur=4)
+file_res=cb.utils.pre_preprocess_movie_labeling(dview, fnames, median_filter_size=(2,1,1), 
+                                  resize_factors=[.2,.1666666666*3],diameter_bilateral_blur=4)
 
 #%%
+
 client_.close()
-cse.utilities.stop_server(is_slurm=True)
+cse.utilities.stop_server(is_slurm=True,pdir=pdir,profile=profile)
 
 #%%
 
@@ -109,16 +193,16 @@ cse.utilities.stop_server(is_slurm=True)
 fold=os.path.split(os.path.split(fnames[0])[-2])[-1]
 os.mkdir(fold)
 #%%
-files=glob.glob(fnames[0][:-20]+'*BL_compress_.tif')
+files=glob.glob(fnames[0][:-19]+'*BL_compress_.tif')
 files.sort()
 print files
 #%%
 m=cb.load_movie_chain(files,fr=3)
-m.play(backend='opencv',gain=10,fr=40)
+m.play(backend='opencv',gain=10,fr=10)
 #%%
 m.save(files[0][:-20]+'_All_BL.tif')
 #%%
-files=glob.glob(fnames[0][:-20]+'*[0-9]._compress_.tif')
+files=glob.glob(fnames[0][:-19]+'*[0-9]._compress_.tif')
 files.sort()
 print files
 #%%
