@@ -190,10 +190,11 @@ def pre_preprocess_movie_labeling(dview, file_names, median_filter_size=(2,1,1),
    for name in file_names:
             args.append([name,resize_factors,diameter_bilateral_blur,median_filter_size])
             
-    
-   file_res = dview.map_sync(pre_process_handle, args)                         
-   dview.results.clear()       
-
+   if dview is not None: 
+       file_res = dview.map_sync(pre_process_handle, args)                         
+       dview.results.clear()       
+   else:
+       file_res = map(pre_process_handle, args)     
         
    return file_res
     
@@ -311,7 +312,7 @@ def mode_robust(inputData, axis=None, dtype=None):
         dataMode = _hsm(data)
 
     return dataMode
-    
+#%%    
 def process_movie_parallel(arg_in):
 #    import calblitz
 #    import calblitz.movies
@@ -326,35 +327,38 @@ def process_movie_parallel(arg_in):
     fname,fr,margins_out,template,max_shift_w, max_shift_h,remove_blanks,apply_smooth=arg_in
     
     with open(fname[:-4]+'.stout', "a") as log:
-        
+        print fname
 #        sys.stdout = log
         
     #    import pdb
     #    pdb.set_trace()
         Yr=cb.load(fname,fr=fr)
-        print 'loaded'    
-        if apply_smooth:
-            print 'applying smoothing'
-            Yr=Yr.bilateral_blur_2D(diameter=10,sigmaColor=10000,sigmaSpace=0)
-            
-        Yr=Yr-np.float32(np.percentile(Yr,1))     # needed to remove baseline
-        print 'Remove BL'
-        if margins_out!=0:
-            Yr=Yr[:,margins_out:-margins_out,margins_out:-margins_out] # borders create troubles
-        print 'motion correcting'
-        Yr,shifts,xcorrs,template=Yr.motion_correct(max_shift_w=max_shift_w, max_shift_h=max_shift_h,  method='opencv',template=template,remove_blanks=remove_blanks) 
-        print 'median computing'        
-        template=Yr.bin_median()
-        print 'saving'         
-        Yr.save(fname[:-3]+'hdf5')        
-        print 'saving 2'                 
-        np.savez(fname[:-3]+'npz',shifts=shifts,xcorrs=xcorrs,template=template)
-        print 'deleting'        
-        del Yr
-        print 'done!'
-        #sys.stdout = sys.__stdout__ 
-        
-    return fname[:-3]        
+        if Yr.ndim>1:
+            print 'loaded'    
+            if apply_smooth:
+                print 'applying smoothing'
+                Yr=Yr.bilateral_blur_2D(diameter=10,sigmaColor=10000,sigmaSpace=0)
+                
+            Yr=Yr-np.float32(np.percentile(Yr,1))     # needed to remove baseline
+            print 'Remove BL'
+            if margins_out!=0:
+                Yr=Yr[:,margins_out:-margins_out,margins_out:-margins_out] # borders create troubles
+            print 'motion correcting'
+            Yr,shifts,xcorrs,template=Yr.motion_correct(max_shift_w=max_shift_w, max_shift_h=max_shift_h,  method='opencv',template=template,remove_blanks=remove_blanks) 
+            print 'median computing'        
+            template=Yr.bin_median()
+            print 'saving'         
+            Yr.save(fname[:-3]+'hdf5')        
+            print 'saving 2'                 
+            np.savez(fname[:-3]+'npz',shifts=shifts,xcorrs=xcorrs,template=template)
+            print 'deleting'        
+            del Yr
+            print 'done!'
+            return fname[:-3] 
+            #sys.stdout = sys.__stdout__ 
+        else:
+            return None
+           
 #%% 
 def val_parse(v):
     # parse values from si tags into python objects if possible
