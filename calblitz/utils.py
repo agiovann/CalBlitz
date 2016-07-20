@@ -347,14 +347,15 @@ def process_movie_parallel(arg_in):
             Yr,shifts,xcorrs,template=Yr.motion_correct(max_shift_w=max_shift_w, max_shift_h=max_shift_h,  method='opencv',template=template,remove_blanks=remove_blanks) 
             print 'median computing'        
             template=Yr.bin_median()
-            print 'saving'         
-            Yr.save(fname[:-3]+'hdf5')        
+            print 'saving'  
+            idx_dot=len(fname.split('.')[-1])
+            Yr.save(fname[:-idx_dot]+'hdf5')        
             print 'saving 2'                 
-            np.savez(fname[:-3]+'npz',shifts=shifts,xcorrs=xcorrs,template=template)
+            np.savez(fname[:-idx_dot]+'npz',shifts=shifts,xcorrs=xcorrs,template=template)
             print 'deleting'        
             del Yr
             print 'done!'
-            return fname[:-3] 
+            return fname[:-idx_dot] 
             #sys.stdout = sys.__stdout__ 
         else:
             return None
