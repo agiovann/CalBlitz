@@ -33,7 +33,25 @@ from time import time
 import pylab as pl
 import psutil
 import calblitz as cb
+from ipyparallel import Client
+#%%
+single_thread=False
 
+if single_thread:
+    dview=None
+else:    
+    try:
+        c.close()
+    except:
+        print 'C was not existing, creating one'
+    print "Stopping  cluster to avoid unnencessary use of memory...."
+    sys.stdout.flush()  
+    cse.utilities.stop_server()
+    cse.utilities.start_server()
+    c=Client()
+    dview=c[::2]
+
+print 'using '+ str(len(dview))+ ' processors'    
 #%%
 import os
 fnames=[]
@@ -42,16 +60,6 @@ for file in os.listdir("./"):
         fnames.append(file)
 fnames.sort()
 print fnames  
-#%%
-fnames=['./movies/demoMovie_PC.tif']
-#%%
-n_processes = 4#np.maximum(psutil.cpu_count() - 2,1) # roughly number of cores on your machine minus 1
-#print 'using ' + str(n_processes) + ' processes'
-p=2 # order of the AR model (in general 1 or 2)
-print "Stopping  cluster to avoid unnencessary use of memory...."
-sys.stdout.flush()  
-cse.utilities.stop_server() 
-cse.utilities.start_server(n_processes)
 #%%
 #low_SNR=False
 #if low_SNR:
@@ -71,22 +79,46 @@ print t2
 #%%   
 all_movs=[]
 for f in  fnames:
-    with np.load(f[:-3]+'npz') as fl:
-        pl.subplot(1,2,1)
-        pl.imshow(fl['template'],cmap=pl.cm.gray)
-        pl.subplot(1,2,2)
+    idx=f.find('.')
+    with np.load(f[:idx+1]+'npz') as fl:
+        print f
+#        pl.subplot(1,2,1)
+#        pl.imshow(fl['template'],cmap=pl.cm.gray)
+#        pl.subplot(1,2,2)
         pl.plot(fl['shifts'])       
         all_movs.append(fl['template'][np.newaxis,:,:])
-        pl.pause(.5)
-        pl.cla()
-#%%        
-all_movs=cb.movie(np.concatenate(all_movs,axis=0),fr=10)
-all_movs,shifts,_,_=all_movs.motion_correct(template=np.median(all_movs,axis=0))
-template=np.median(all_movs,axis=0)
-np.save('template_total',template)
-pl.imshow(template,cmap=pl.cm.gray,vmax=100)
+        pl.pause(.001)
+#        pl.cla()
 #%%
-file_res=cb.motion_correct_parallel(fnames,40,template=template,margins_out=0,max_shift_w=25, max_shift_h=25,remove_blanks=False)
+num_movies_per_chunk=20        
+chunks=range(0,len(fnames),20)
+chunks[-1]=len(fnames)
+#%%
+template_each=[];
+all_movs_each=[];
+movie_names=[]
+for idx in range(len(chunks)-1):
+        print chunks[idx], chunks[idx+1]
+        all_mov=all_movs[chunks[idx]:chunks[idx+1]]
+        all_mov=cb.movie(np.concatenate(all_mov,axis=0),fr=30)
+        all_mov,shifts,_,_=all_mov.motion_correct(template=np.median(all_mov,axis=0))
+        template=np.median(all_mov,axis=0)
+        all_movs_each.append(all_mov)
+        template_each.append(template)
+        movie_names.append(fnames[chunks[idx]:chunks[idx+1]])
+        pl.imshow(template,cmap=pl.cm.gray,vmax=100)
+        
+np.savez('template_total.npz',template_each=template_each, all_movs_each=all_movs_each,movie_names=movie_names)        
+#%%
+for mov in all_movs_each:
+    mov.play(backend='opencv',gain=10.,fr=100)
+#%%
+
+#%%
+file_res=[]
+for template,fn in zip(template_each,movie_names):
+    print fn
+    file_res.append(cb.motion_correct_parallel(fn,30,dview=None,template=template,margins_out=0,max_shift_w=35, max_shift_h=35,remove_blanks=True))
 #%%
 for f in  file_res:
     with np.load(f+'npz') as fl:
