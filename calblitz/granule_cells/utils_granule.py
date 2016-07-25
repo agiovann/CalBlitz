@@ -20,7 +20,7 @@ from scipy.sparse import csc,csr,coo_matrix
 from scipy.spatial.distance import cdist
 from scipy import ndimage
 from scipy.optimize import linear_sum_assignment   
-
+from sklearn.utils.linear_assignment_ import linear_assignment    
 #%% Process triggers
 def extract_triggers(file_list,read_dictionaries=False): 
     
@@ -483,6 +483,8 @@ def load_results(f_results):
     YrA_s=[]
     Cn_s=[]
     shape = None
+    b_s=[]
+    f_s=[]
     for f_res in f_results:
         print f_res
         i+=1
@@ -491,6 +493,8 @@ def load_results(f_results):
             C_s.append(ld['C2'])
             YrA_s.append(ld['YrA'])
             Cn_s.append(ld['Cn'])
+            b_s.append(ld['b2'])
+            f_s.append(ld['f2'])            
             if shape is not None:
                 shape_new=(ld['d1'],ld['d2'])
                 if shape_new != shape:
@@ -500,7 +504,7 @@ def load_results(f_results):
             else:            
                 shape=(ld['d1'],ld['d2'])
                 
-    return A_s,C_s,YrA_s, Cn_s, shape  
+    return A_s,C_s,YrA_s, Cn_s, b_s, f_s, shape  
 
 #%% threshold and remove spurious components    
 def threshold_components(A_s,shape,min_size=5,max_size=np.inf,max_perc=.5):        
@@ -623,7 +627,8 @@ def distance_masks(M_s,cm_s,max_dist):
                     if union  > 0:
                         D[i,j] = 1-1.*intersection/(union-intersection)
                     else:
-                        D[i,j] = 1
+#                        print 'empty component: setting distance to max'
+                        D[i,j] = 1.
                         
                     if np.isnan(D[i,j]):
                         raise Exception('Nan value produced. Error in inputs')
@@ -646,7 +651,7 @@ def find_matches(D_s, print_assignment=False):
         
        
     #    indexes = m.compute(DD)
-    #    indexes = linear_assignment(DD)
+#        indexes = linear_assignment(DD)
         indexes = linear_sum_assignment(DD)
         indexes2=[(ind1,ind2) for ind1,ind2 in zip(indexes[0],indexes[1])]
         matches.append(indexes)
@@ -659,6 +664,7 @@ def find_matches(D_s, print_assignment=False):
             total.append(value)      
         print  'FOV: %d, shape: %d,%d total cost: %f' % (ii, DD.shape[0],DD.shape[1], np.sum(total))
         print time()-t_start
-    costs.append(total)        
+        costs.append(total)      
+        
     return matches,costs
       

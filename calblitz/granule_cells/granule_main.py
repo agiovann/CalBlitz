@@ -94,7 +94,7 @@ f_results.sort()
 for rs in f_results:
     print rs
 #%% load results and put them in lists
-A_s,C_s,YrA_s, Cn_s, shape =  gc.load_results(f_results)     
+A_s,C_s,YrA_s, Cn_s, b_s, f_s, shape =  gc.load_results(f_results)     
 #%%
 B_s, lab_imgs, cm_s  = gc. threshold_components(A_s,shape, min_size=5,max_size=50,max_perc=.5)
 #%%
@@ -103,7 +103,7 @@ for i,A_ in enumerate(B_s):
      pl.subplot(2,3,i+1)
      pl.imshow(np.reshape(A_.sum(1),shape,order='F'),cmap='gray',vmax=.5)
 #%% compute mask distances 
-max_dist=100   
+max_dist=30
 D_s=gc.distance_masks(B_s,cm_s,max_dist)       
 np.savez('distance_masks.npz',D_s=D_s)
 #%%
@@ -117,82 +117,130 @@ for ii,D in enumerate(D_s):
 matches,costs =  gc.find_matches(D_s, print_assignment=False)
 #%%
 neurons=[]
+num_neurons=0
+Yr_tot=[]
+num_chunks=len(C_s)
 for idx in range(len(matches[0][0])):
     neuron=[]
     neuron.append(idx)
-    for match,cost in zip(matches,costs):
+    Yr=YrA_s[0][idx]+C_s[0][idx]
+    for match,cost,chk in zip(matches,costs,range(1,num_chunks)):
         rows,cols=match        
         m_neur=np.where(rows==neuron[-1])[0].squeeze()
-        print cost
-        if cost[m_neur]<.5:
-            neuron.append(cols[m_neur])
+        if m_neur.size > 0:                           
+            if cost[m_neur]<=.6:
+                neuron.append(cols[m_neur])
+                Yr=np.hstack([Yr,YrA_s[chk][idx]+C_s[chk][idx]])
+            else:                
+                break
         else:
             break
-#    print len(neuron)        
-    neurons.append(neuron)
-#%%        
+    if len(neuron)>len(matches):           
+        num_neurons+=1        
+        neurons.append(neuron)
+        Yr_tot.append(Yr)
+        
+print num_neurons    
+neurons=np.array(neurons).T
+Yr_tot=np.array(Yr_tot)
+#%%
+np.savez('neurons_matching.npz',matches=matches,costs=costs,neurons=neurons,D_s=D_s)
+#%%
+downs_factor=.3
+tmpl_name='20160705103903_00-template_total.npz'
+with np.load(tmpl_name) as ld:
+    mov_names_each=ld['movie_names']
+
+for idx,mvs in enumerate(mov_names_each):
+    print idx 
     
+    chunk_sizes=[]
     
-for idx,match in enumerate(matches):
-    for row,col in match:
-        neuron
-#%% visualize matchings
-pl.close()
-ii=0
-for match,cost,B_1,B_2 in zip(matches,costs,B_s[:-1],B_s[1:]):
-    ii+=1    
-    pl.subplot(3,2,ii)    
-    for row, column in match:
-        value = DD[row,column]
-        if value > .5:
-    #        pl.subplot(1,2,1)
-            pl.cla() 
-            pl.imshow(np.reshape(B_1[:,row].todense(),(512,512),order='F'),cmap='gray',interpolation='None')    
-    #        pl.subplot(1,2,2)
-    #        pl.cla() 
-            pl.imshow(np.reshape(B_2[1][:,column].todense(),(512,512),order='F'),alpha=.5,cmap='hot',interpolation='None')               
-            if B_s[0][:,row].T.dot(B_s[1][:,column]).todense() == 0:
-                print 'Flaw'
-                
-            pl.pause(.3)
-            break
+    for mv in mvs:
+        base_name=os.path.splitext(os.path.split(mv)[-1])[0]
+#        mov_chunk_name=glob(base_name+'*.mmap')[0]
+        with np.load(base_name+'.npz') as ld:
+            TT=len(ld['shifts'])            
+#        _,_,TT=cse.utilities.load_memmap(mov_chunk_name)
+        chunk_sizes.append(TT)
+        
+        
+    num_chunks=np.sum(chunk_sizes)
+    
+    A = A_s[idx][:,neurons[idx]] 
+    nA = (A.power(2)).sum(0)
+    b = b_s[idx]
+    f = f_s[idx]
+    bckg=cb.movie(cb.to_3D(b.dot(f).T,(-1,shape[0],shape[1])),fr=33*downs_factor)
+    b_size=np.shape(bckg)[0]
+    bckg=bckg.resize(1,1,1.*num_chunks/b_size)
+    if num_chunks != bckg.shape[0]:
+        raise Exception('The number of frames are not matching')
+    counter=0
+    for jj,mv in enumerate(mvs):
+        mov_chunk_name=os.path.splitext(os.path.split(mv)[-1])[0]+'.hdf5'        
+        print mov_chunk_name
+        m=cb.load(mov_chunk_name,fr=33)
+        
+        m=m-bckg[counter:counter+chunk_sizes[jj]]            
+        counter+=chunk_sizes[jj]
+        
+#        (m).play(backend='opencv',gain=10.,fr=33)
+        m=np.reshape(m,(np.prod(shape),-1),order='F')
+        Y_r=A.T.dot(m)
+        Y_r= scipy.sparse.linalg.spsolve(scipy.sparse.spdiags(np.sqrt(nA),0,nA.size,nA.size),Y_r)
+#        Y_r=A.T.dot(Yr-)
+                               
 #%%
-matched = ([idx for idx,t in enumerate(total) if t<.5])
-indexes[matched]
+nA = full(sum(A.^2))';  % energy of each row
+Y_r = spdiags(sqrt(nA),0,length(nA),length(nA))\(A'*(Y-full(b)*f)); 
+    % raw data trace filtered with ROI
+C_sorted = spdiags(sqrt(nA),0,length(nA),length(nA))*C;
+[~,ind_sor] = sort(max(C_sorted,[],2),'descend');
+figure;
+for i = 1:nr
+    plot(1:T,Y_r(ind_sor(i),:),1:T,C_sorted(ind_sor(i),:)); 
+    %title(sprintf('Sorted ROI %i, plane %i',i,ind_neur(ind_sor(i))));
+    xlabel('Timestep','fontsize',14,'fontweight','bold');
+    legend('Raw data (averaged over ROI)','Temporal Fit','fontsize',14,'fontweight','bold');
+    %subplot(212);plot(1:T,Y_r(ind_sor(i),:) - C_sorted(ind_sor(i),:));    
+    drawnow; pause; 
+end
 
+    
+#%%            
+for idx,B in enumerate(A_s):
+     pl.subplot(2,3,idx+1)
+     pl.imshow(np.reshape(B[:,neurons[idx]].sum(1),shape,order='F'))
+#%%
+for neuro in range(num_neurons):
+    for idx,B in enumerate(A_s):
+         pl.subplot(2,3,idx+1)
+         pl.imshow(np.reshape(B[:,neurons[idx][neuro]].sum(1),shape,order='F'))
+    pl.pause(.01)     
+    for idx,B in enumerate(A_s):
+        pl.subplot(2,3,idx+1)
+        pl.cla()       
 
-
-
-
-
-
-
-
-
+#%%
+idx=0
+for  row, column in zip(matches[idx][0],matches[idx][1]):
+    value = D_s[idx][row,column]
+    if value < .5:
+#        pl.subplot(1,2,1)
+        pl.cla() 
+        pl.imshow(np.reshape(B_s[idx][:,row].todense(),(512,512),order='F'),cmap='gray',interpolation='None')    
+#        pl.subplot(1,2,2)
+#        pl.cla() 
+        pl.imshow(np.reshape(B_s[idx+1][:,column].todense(),(512,512),order='F'),alpha=.5,cmap='hot',interpolation='None')               
+        if B_s[idx][:,row].T.dot(B_s[idx+1][:,column]).todense() == 0:
+            print 'Flaw'
+            
+        pl.pause(.3)
 
 
 #%%
-from matplotlib.pyplot import Figure    
-x1 = rand(103, 53) 
-figure = pl.figure(figsize=(4, 4), dpi=100)
-ax1 = figure.add_subplot(2,2,1)
-pl.imshow(x1)
-ax2 = figure.add_subplot(2,2,2)
-pl.imshow(x1)
-ax3 = figure.add_subplot(2,2,3)
-pl.imshow(x1)
-ax4 = figure.add_subplot(2,2,4)
-pl.imshow(x1)
-x = pl.ginput(2) 
-pl.show()
-print(x)
 
-#%%
-#axes = figure.add_subplot(212)
-imshow(x1)
-x = ginput(2) 
-print(x)
-show()
 #%%
 Ftraces=C+YrA
 
