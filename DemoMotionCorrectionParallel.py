@@ -35,8 +35,17 @@ import psutil
 import calblitz as cb
 from ipyparallel import Client
 #%%
-single_thread=False
+#%%
+backend='SLURM'
+if backend == 'SLURM':
+    n_processes = np.int(os.environ.get('SLURM_NPROCS'))
+else:
+    n_processes = np.maximum(np.int(psutil.cpu_count()*.75),1) # roughly number of cores on your machine minus 1
+print 'using ' + str(n_processes) + ' processes'
 
+#%% start cluster for efficient computation
+single_thread=False
+backend='local'
 if single_thread:
     dview=None
 else:    
@@ -46,20 +55,33 @@ else:
         print 'C was not existing, creating one'
     print "Stopping  cluster to avoid unnencessary use of memory...."
     sys.stdout.flush()  
-    cse.utilities.stop_server()
-    cse.utilities.start_server()
-    c=Client()
-    dview=c[::2]
+    if backend == 'SLURM':
+        try:
+            cse.utilities.stop_server(is_slurm=True)
+        except:
+            print 'Nothing to stop'
+        slurm_script='/mnt/xfs1/home/agiovann/SOFTWARE/Constrained_NMF/SLURM/slurmStart.sh'
+        cse.utilities.start_server(slurm_script=slurm_script)
+        pdir, profile = os.environ['IPPPDIR'], os.environ['IPPPROFILE']
+        c = Client(ipython_dir=pdir, profile=profile)        
+    else:
+        
+        cse.utilities.stop_server()
+        cse.utilities.start_server()        
+        c=Client()
 
-print 'using '+ str(len(dview))+ ' processors'    
+    print 'Using '+ str(len(c)) + ' processes'
+    dview=c[:len(c)]
 #%%
 import os
 fnames=[]
 for file in os.listdir("./"):
-    if file.startswith("") and file.endswith(".tif"):
-        fnames.append(file)
+    if file.startswith("20160712173043_") and file.endswith(".tif"):
+        fnames.append(os.path.abspath(file))
 fnames.sort()
 print fnames  
+idx_start=[i for i in xrange(len(fnames[0])) if fnames[0][i] != fnames[- 1][i]][0]
+base_name=fnames[0][:idx_start]
 #%%
 #low_SNR=False
 #if low_SNR:
@@ -73,7 +95,7 @@ print fnames
 #    mn.play(gain=5.,magnification=4,backend='opencv',fr=30)
 #%%
 t1 = time()
-file_res=cb.motion_correct_parallel(fnames,fr=30,template=None,margins_out=0,max_shift_w=45, max_shift_h=45,backend='ipyparallel',apply_smooth=True)
+file_res=cb.motion_correct_parallel(fnames,fr=30,template=None,margins_out=0,max_shift_w=45, max_shift_h=45,dview=dview,apply_smooth=True)
 t2=time()-t1
 print t2
 #%%   
@@ -85,14 +107,28 @@ for f in  fnames:
 #        pl.subplot(1,2,1)
 #        pl.imshow(fl['template'],cmap=pl.cm.gray)
 #        pl.subplot(1,2,2)
-        pl.plot(fl['shifts'])       
+             
         all_movs.append(fl['template'][np.newaxis,:,:])
-        pl.pause(.001)
+#        pl.plot(fl['shifts'])  
+#        pl.pause(.001)
 #        pl.cla()
 #%%
-num_movies_per_chunk=20        
-chunks=range(0,len(fnames),20)
+all_movs=cb.movie(np.concatenate(all_movs,axis=0),fr=30)        
+all_movs,shifts,_,_=all_movs.motion_correct(template=np.median(all_movs,axis=0))
+all_movs.play(backend='opencv',gain=75.)
+#%%
+all_movs=np.array(all_movs)
+#%%
+num_movies_per_chunk=30        
+chunks=range(0,len(fnames),num_movies_per_chunk)
 chunks[-1]=len(fnames)
+print chunks
+movie_names=[]
+
+for idx in range(len(chunks)-1):
+        print chunks[idx], chunks[idx+1]       
+        movie_names.append(fnames[chunks[idx]:chunks[idx+1]])
+
 #%%
 template_each=[];
 all_movs_each=[];
@@ -100,7 +136,7 @@ movie_names=[]
 for idx in range(len(chunks)-1):
         print chunks[idx], chunks[idx+1]
         all_mov=all_movs[chunks[idx]:chunks[idx+1]]
-        all_mov=cb.movie(np.concatenate(all_mov,axis=0),fr=30)
+        all_mov=cb.movie(all_mov,fr=30)
         all_mov,shifts,_,_=all_mov.motion_correct(template=np.median(all_mov,axis=0))
         template=np.median(all_mov,axis=0)
         all_movs_each.append(all_mov)
@@ -108,57 +144,54 @@ for idx in range(len(chunks)-1):
         movie_names.append(fnames[chunks[idx]:chunks[idx+1]])
         pl.imshow(template,cmap=pl.cm.gray,vmax=100)
         
-np.savez('template_total.npz',template_each=template_each, all_movs_each=all_movs_each,movie_names=movie_names)        
+np.savez(base_name+'-template_total.npz',template_each=template_each, all_movs_each=np.array(all_movs_each),movie_names=movie_names)        
 #%%
-for mov in all_movs_each:
-    mov.play(backend='opencv',gain=10.,fr=100)
+for idx,mov in enumerate(all_movs_each):
+    mov.play(backend='opencv',gain=50.,fr=100)
+#    mov.save(str(idx)+'sam_example.tif')
 #%%
 
 #%%
 file_res=[]
 for template,fn in zip(template_each,movie_names):
     print fn
-    file_res.append(cb.motion_correct_parallel(fn,30,dview=None,template=template,margins_out=0,max_shift_w=35, max_shift_h=35,remove_blanks=True))
+    file_res.append(cb.motion_correct_parallel(fn,30,dview= dview,template=template,margins_out=0,max_shift_w=35, max_shift_h=35,remove_blanks=False))
 #%%
-for f in  file_res:
-    with np.load(f+'npz') as fl:
-        pl.subplot(1,2,1)
-        pl.imshow(fl['template'],cmap=pl.cm.gray)
-        pl.subplot(1,2,2)
-        pl.plot(fl['shifts'])       
-        pl.pause(0.1)
-        pl.cla()
+for f1 in  file_res:
+    for f in f1:
+        with np.load(f+'npz') as fl:
+            
+            pl.subplot(1,2,1)
+            pl.cla()
+            pl.imshow(fl['template'],cmap=pl.cm.gray)
+            pl.subplot(1,2,2)
+            pl.plot(fl['shifts'])       
+            pl.pause(0.001)
+            pl.cla()
         
-print time() - t1 - 200
 #%%
-big_mov=[];
-big_shifts=[]
-fr_remove_init=30
-for f in  fnames:
-    with np.load(f[:-3]+'npz') as fl:
-        big_shifts.append(fl['shifts'])
-        
-    print f
-    Yr=cb.load(f[:-3]+'hdf5')[fr_remove_init:]
-    Yr=Yr.resize(fx=1,fy=1,fz=.2)
-    Yr = np.transpose(Yr,(1,2,0)) 
-    d1,d2,T=Yr.shape
-    Yr=np.reshape(Yr,(d1*d2,T),order='F')
-    print Yr.shape
-#    np.save(fname[:-3]+'npy',np.asarray(Yr))
-    big_mov.append(np.asarray(Yr))
+import shutil
+names_new_each=[]
+for mov_names_each in movie_names:   
+    movie_names_hdf5=[]
+    for mov_name in mov_names_each:
+        movie_names_hdf5.append(mov_name[:-3]+'hdf5')
+        #idx_x=slice(12,500,None)
+        #idx_y=slice(12,500,None)
+        #idx_xy=(idx_x,idx_y)
+    idx_xy=None
+    name_new=cse.utilities.save_memmap_each(movie_names_hdf5, dview=dview,base_name=None, resize_fact=(1, 1, .2), remove_init=0,idx_xy=idx_xy )
+    name_new.sort()    
+    names_new_each.append(name_new)
+    print name_new
 #%%
-big_mov=np.concatenate(big_mov,axis=-1)
-big_shifts=np.concatenate(big_shifts,axis=0)
+fnames_new_each=dview.map_sync(cse.utilities.save_memmap_join,names_new_each)
 #%%
-np.save('Yr_DS.npy',big_mov)
-np.save('big_shifts.npy',big_shifts)
+#for name_new in names_new_each:
+#    fnames_new_each.append(cse.utilities.save_memmap_join(name_new, n_chunks=2, dview=None))
+    
 
 #%%
-_,d1,d2=np.shape(cb.load(fnames[0][:-3]+'hdf5',subindices=range(3),fr=10))
-Yr=np.load('Yr_DS.npy',mmap_mode='r')  
-d,T=Yr.shape      
-Y=np.reshape(Yr,(d1,d2,T),order='F')
-Y=cb.movie(np.array(np.transpose(Y,(2,0,1))),fr=30)
+m=cb.load(fnames_new_each[-1],fr=5)
+m.play(backend='opencv',gain=50.,fr=30)
 #%%
-Y.play(backend='opencv',fr=300,gain=10,magnification=1)
