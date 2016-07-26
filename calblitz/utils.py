@@ -199,7 +199,7 @@ def pre_preprocess_movie_labeling(dview, file_names, median_filter_size=(2,1,1),
    return file_res
     
 #%%
-def motion_correct_parallel(file_names,fr,template=None,margins_out=0,max_shift_w=5, max_shift_h=5,remove_blanks=False,apply_smooth=True,dview=None):
+def motion_correct_parallel(file_names,fr,template=None,margins_out=0,max_shift_w=5, max_shift_h=5,remove_blanks=False,apply_smooth=False,dview=None):
     """motion correct many movies usingthe ipyparallel cluster
     Parameters
     ----------

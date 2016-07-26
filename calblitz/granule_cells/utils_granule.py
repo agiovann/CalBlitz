@@ -4,6 +4,7 @@ Created on Tue Feb 16 17:56:14 2016
 
 @author: agiovann
 """
+import os
 import cv2
 import h5py
 import numpy as np
@@ -122,7 +123,7 @@ def downsample_triggers(triggers,fraction_downsample=1):
     Parameters
     ----------
     
-    triggers: list
+    triggers: list=Ftraces[idx]
         output of  extract_triggers function
     
     fraction_downsample: float
@@ -142,7 +143,7 @@ def downsample_triggers(triggers,fraction_downsample=1):
     return triggers
    
 #%%
-def get_behavior_traces(fname,t0,t1,freq,ISI,draw_rois=False,plot_traces=False,mov_filt_1d=True,window_hp=201,window_lp=3):
+def get_behavior_traces(fname,t0,t1,freq,ISI,draw_rois=False,plot_traces=False,mov_filt_1d=True,window_hp=201,window_lp=3,interpolate=True,EXPECTED_ISI=.25):
     """
     From hdf5 movies extract eyelid closure and wheel movement
     
@@ -279,28 +280,67 @@ def get_behavior_traces(fname,t0,t1,freq,ISI,draw_rois=False,plot_traces=False,m
                     ts=np.array(trial['ts'])
 
                     if np.size(ts)>0:
+                        
+                        assert np.std(np.diff(ts))<0.005, 'Time stamps of behaviour are unreliable'
 
-                        new_ts=np.linspace(0,ts[-1,0]-ts[0,0],np.shape(mov)[0])
                         
-                        if dt['trials'][idx_tr,-1] == US_ALONE:
-                            t_us=np.maximum(t_us,dt['trials'][idx_tr,3]-dt['trials'][idx_tr,0])  
-                            mmm=mov[:n_samples_ISI].copy()
-                            mov=mov[:-n_samples_ISI]
-                            mov=np.concatenate([mmm,mov])
-                            
-                        elif dt['trials'][idx_tr,-1] == CS_US: 
-                            t_cs=np.maximum(t_cs,dt['trials'][idx_tr,2]-dt['trials'][idx_tr,0])                                
-                            t_us=np.maximum(t_us,dt['trials'][idx_tr,3]-dt['trials'][idx_tr,0])   
-                            t_uss.append(t_us)                                                     
-                            ISI=t_us-t_cs
-                            ISIs.append(ISI)
-                            n_samples_ISI=np.int(ISI*freq)
+                        if interpolate:
+
+                            new_ts=np.linspace(0,ts[-1,0]-ts[0,0],np.shape(mov)[0])
+
+                            if dt['trials'][idx_tr,-1] == US_ALONE:
+
+                                t_us=np.maximum(t_us,dt['trials'][idx_tr,3]-dt['trials'][idx_tr,0])  
+
+                                mmm=mov[:n_samples_ISI].copy()
+
+                                mov=mov[:-n_samples_ISI]
+
+                                mov=np.concatenate([mmm,mov])
+                                
+                            elif dt['trials'][idx_tr,-1] == CS_US: 
+
+                                t_cs=np.maximum(t_cs,dt['trials'][idx_tr,2]-dt['trials'][idx_tr,0])                                
+
+                                t_us=np.maximum(t_us,dt['trials'][idx_tr,3]-dt['trials'][idx_tr,0])   
+
+                                t_uss.append(t_us)                                                     
+
+                                ISI=t_us-t_cs
+
+                                ISIs.append(ISI)
+
+                                n_samples_ISI=np.int(ISI*freq)
+
+                            else:
+                                
+                                t_cs=np.maximum(t_cs,dt['trials'][idx_tr,2]-dt['trials'][idx_tr,0])   
+
+                            new_ts=new_ts
+
+                            tims.append(new_ts)
+                        
                         else:
-                            t_cs=np.maximum(t_cs,dt['trials'][idx_tr,2]-dt['trials'][idx_tr,0])                                
+                            
+                            start,end,t_CS,t_US= dt['trials'][idx_tr,:-1]-dt['trials'][idx_tr,0]
+                            
+                            f_rate=np.median(np.diff(ts[:,0]))
+                            ISI=t_US-t_CS
+                            idx_US=np.int(t_US/f_rate)
+                            idx_CS=np.int(t_CS/f_rate)
+                            fr_before_US=np.int((t_US - start -.1)/f_rate)
+                            fr_after_US=np.int((end -.1  - t_US)/f_rate)
+                            idx_abs=np.arange(-fr_before_US,fr_after_US)
+                            time_abs=idx_abs*f_rate
+                            
+                            
+                            assert np.abs(ISI-EXPECTED_ISI)<.01, str(np.abs(ISI-EXPECTED_ISI)) + ':the distance form CS and US is different from what expected'
+                            
+#                            trig_US=
+#                            new_ts=
+                            
                         
-                        
-                        new_ts=new_ts
-                        tims.append(new_ts)
+                       
                         
                     mov_e=cb.movie(mov*rois[0][::-1].T,fr=1/np.mean(np.diff(new_ts)))
                     mov_w=cb.movie(mov*rois[1][::-1].T,fr=1/np.mean(np.diff(new_ts)))
@@ -328,6 +368,7 @@ def get_behavior_traces(fname,t0,t1,freq,ISI,draw_rois=False,plot_traces=False,m
 #                    thr=np.minimum(255,thr)
 #                    return mov     
                     if mov_filt_1d:
+                        
                         mov_e=np.mean(mov_e, axis=(1,2))
                         window_hp_=window_hp
                         window_lp_=window_lp
@@ -668,3 +709,137 @@ def find_matches(D_s, print_assignment=False):
         
     return matches,costs
       
+#%%
+def link_neurons(matches,costs,max_cost=0.6,min_FOV_present=None):
+    """
+    Link neurons from different FOVs given matches and costs obtained from the hungarian algorithm
+    
+    Parameters
+    ----------
+    matches: lists of list of tuple
+        output of the find_matches function
+    
+    costs: list of lists of scalars
+        cost associated to each match in matches
+        
+    max_cost: float
+        maximum allowed value of the 1- intersection over union metric    
+    
+    min_FOV_present: int
+        number of FOVs that must consequently contain the neuron starting from 0. If none 
+        the neuro must be present in each FOV
+    Returns:
+    --------
+    neurons: list of arrays representing the indices of neurons in each FOV
+    
+    """
+    if min_FOV_present is None:
+        min_FOV_present=len(matches)
+    
+    neurons=[]
+    num_neurons=0
+#    Yr_tot=[]
+    num_chunks=len(matches)+1
+    for idx in range(len(matches[0][0])):
+        neuron=[]
+        neuron.append(idx)
+#        Yr=YrA_s[0][idx]+C_s[0][idx]
+        for match,cost,chk in zip(matches,costs,range(1,num_chunks)):
+            rows,cols=match        
+            m_neur=np.where(rows==neuron[-1])[0].squeeze()
+            if m_neur.size > 0:                           
+                if cost[m_neur]<=max_cost:
+                    neuron.append(cols[m_neur])
+#                    Yr=np.hstack([Yr,YrA_s[chk][idx]+C_s[chk][idx]])
+                else:                
+                    break
+            else:
+                break
+        if len(neuron)>min_FOV_present:           
+            num_neurons+=1        
+            neurons.append(neuron)
+#            Yr_tot.append(Yr)
+            
+    
+    neurons=np.array(neurons).T
+    print 'num_neurons:' + str(num_neurons)
+#    Yr_tot=np.array(Yr_tot)
+    return neurons
+    
+#%%
+def generate_linked_traces(mov_names,chunk_sizes,A,b,f):
+    """
+    Generate traces (DFF,BL and DF) for a group of movies that share the same A,b and f,
+    by applying the same transformation over a set of movies. This removes
+    the contamination of neuropil and then masks the components.
+    
+    
+    
+    Parameters:
+    -----------
+    mov_names
+    
+    A
+
+    neurons_map
+    
+    
+    Returns:
+    --------
+    
+    
+    """
+    num_chunks=np.sum(chunk_sizes)
+#    A = A_s[idx][:,neurons[idx]] 
+    nA = (A.power(2)).sum(0)
+#    bckg=cb.movie(cb.to_3D(b.dot(f).T,(-1,shape[0],shape[1])),fr=1)
+    f=np.array(f).squeeze()
+#    bckg=bckg.resize(1,1,1.*num_chunks/b_size)
+    b_size=f.shape[0]
+#    if num_chunks != b_size:        
+#        raise Exception('The number of frames are not matching')
+#        
+
+    counter=0
+    
+    
+    
+    f_in=np.atleast_2d(scipy.signal.resample(f,num_chunks))
+         
+         
+     
+#    C,f,S,bl,c1,neurons_sn,g,YrA = cse.temporal.update_temporal_components(Yr,A,b,C_in,f_in,p=0)
+
+    
+        
+    traces=[]
+    traces_BL=[]
+    traces_DFF=[]
+    
+    for jj,mv in enumerate(mov_names):
+
+        mov_chunk_name=os.path.splitext(os.path.split(mv)[-1])[0]+'.hdf5'        
+
+        print mov_chunk_name
+        
+        m=cb.load(mov_chunk_name).to_2D().T      
+        bckg_1=b.dot(f_in[:,counter:counter+chunk_sizes[jj]])
+        
+        m=m-bckg_1          
+#        (m).play(backend='opencv',gain=10.,fr=33)
+#        m=np.reshape(m,(-1,np.prod(shape)),order='F').T
+#        bckg_1=np.reshape(bckg_1,(-1,np.prod(shape)),order='F').T
+        
+        counter+=chunk_sizes[jj]
+       
+        Y_r_sig=A.T.dot(m)
+        Y_r_sig= scipy.sparse.linalg.spsolve(scipy.sparse.spdiags(np.sqrt(nA),0,nA.size,nA.size),Y_r_sig)
+        traces.append(Y_r_sig)
+        
+        Y_r_bl=A.T.dot(bckg_1)
+        Y_r_bl= scipy.sparse.linalg.spsolve(scipy.sparse.spdiags(np.sqrt(nA),0,nA.size,nA.size),Y_r_bl)                
+        traces_BL.append(Y_r_bl)        
+        Y_r_bl=cse.utilities.mode_robust(Y_r_bl,1)        
+        traces_DFF.append(Y_r_sig/Y_r_bl[:,np.newaxis])
+
+    return traces,traces_DFF,traces_BL    

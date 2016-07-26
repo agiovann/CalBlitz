@@ -37,6 +37,9 @@ from ipyparallel import Client
 import calblitz as cb
 from calblitz.granule_cells import utils_granule as gc
 #%%
+with np.load(glob('*_ImgDescr.npz')[0]) as ld:
+    f_rate=ld['image_descriptions'][0]['scanimage.SI.hRoiManager.scanFrameRate']
+#%%
 fls=glob('2016*.tif')     
 
 fls.sort()     
@@ -48,7 +51,8 @@ t_start=time()
 res_bt=gc.get_behavior_traces('20160705103903_cam2.h5',t0=0,t1=8.0,freq=60,ISI=.25,draw_rois=False,plot_traces=False,mov_filt_1d=True,window_lp=5)   
 t_end=time()-t_start
 print t_end
-
+#%%
+np.savez('behavioral_traces.npz',res_bt=res_bt)
 #%%   
 with np.load('all_triggers.npz') as at:
     triggers_img=at['triggers']
@@ -61,7 +65,7 @@ idx_US=res_bt['idx_US']
 idx_CS=res_bt['idx_CS']
 
 idx_ALL=np.sort(np.hstack([idx_CS_US,idx_US,idx_CS]))
-eye_traces,amplitudes_at_US, trig_CRs=gc.process_eyelid_traces(eye_traces,tm,idx_CS_US,idx_US,idx_CS,thresh_CR=.05,time_CR_on=-.1,time_US_on=.05)
+eye_traces,amplitudes_at_US, trig_CRs=gc.process_eyelid_traces(eye_traces,tm,idx_CS_US,idx_US,idx_CS,thresh_CR=.15,time_CR_on=-.1,time_US_on=.05)
 
 idxCSUSCR = trig_CRs['idxCSUSCR']
 idxCSUSNOCR = trig_CRs['idxCSUSNOCR']
@@ -70,6 +74,7 @@ idxCSNOCR = trig_CRs['idxCSNOCR']
 idxNOCR = trig_CRs['idxNOCR']
 idxCR = trig_CRs['idxCR']
 idxUS = trig_CRs['idxUS']
+idxCSCSUS=np.concatenate([idx_CS,idx_CS_US])
 
 pl.plot(tm,np.mean(eye_traces[idxCSUSCR],0))       
 pl.plot(tm,np.mean(eye_traces[idxCSUSNOCR],0))     
@@ -85,9 +90,6 @@ pl.hist(amplitudes_at_US[idxCR],bins=bins)
 pl.hist(amplitudes_at_US[idxNOCR],bins=bins)
 
 
-#%%
-wheel_traces, movement_at_CS, trigs_mov = gc.process_wheel_traces(np.array(res_bt['wheel']),tm,thresh_MOV_iqr=3,time_CS_on=-.25,time_US_on=0)    
-           
 #%% 
 f_results= glob('*.results_analysis.npz')
 f_results.sort()
@@ -95,7 +97,6 @@ for rs in f_results:
     print rs
 #%% load results and put them in lists
 A_s,C_s,YrA_s, Cn_s, b_s, f_s, shape =  gc.load_results(f_results)     
-#%%
 B_s, lab_imgs, cm_s  = gc. threshold_components(A_s,shape, min_size=5,max_size=50,max_perc=.5)
 #%%
 for i,A_ in enumerate(B_s):
@@ -116,103 +117,35 @@ for ii,D in enumerate(D_s):
 #%% find matches
 matches,costs =  gc.find_matches(D_s, print_assignment=False)
 #%%
-neurons=[]
-num_neurons=0
-Yr_tot=[]
-num_chunks=len(C_s)
-for idx in range(len(matches[0][0])):
-    neuron=[]
-    neuron.append(idx)
-    Yr=YrA_s[0][idx]+C_s[0][idx]
-    for match,cost,chk in zip(matches,costs,range(1,num_chunks)):
-        rows,cols=match        
-        m_neur=np.where(rows==neuron[-1])[0].squeeze()
-        if m_neur.size > 0:                           
-            if cost[m_neur]<=.6:
-                neuron.append(cols[m_neur])
-                Yr=np.hstack([Yr,YrA_s[chk][idx]+C_s[chk][idx]])
-            else:                
-                break
-        else:
-            break
-    if len(neuron)>len(matches):           
-        num_neurons+=1        
-        neurons.append(neuron)
-        Yr_tot.append(Yr)
-        
-print num_neurons    
-neurons=np.array(neurons).T
-Yr_tot=np.array(Yr_tot)
+neurons=link_neurons(matches,costs,max_cost=0.6,min_FOV_present=None)
 #%%
 np.savez('neurons_matching.npz',matches=matches,costs=costs,neurons=neurons,D_s=D_s)
 #%%
-downs_factor=.3
-tmpl_name='20160705103903_00-template_total.npz'
-with np.load(tmpl_name) as ld:
-    mov_names_each=ld['movie_names']
-
-for idx,mvs in enumerate(mov_names_each):
-    print idx 
+if 1:
+    import calblitz as cb
+    from calblitz.granule_cells import utils_granule as gc
+    from glob import glob
+    import numpy as np
+    import os
+    import scipy 
+    import pylab as pl
+    import ca_source_extraction as cse
     
-    chunk_sizes=[]
-    
-    for mv in mvs:
-        base_name=os.path.splitext(os.path.split(mv)[-1])[0]
-#        mov_chunk_name=glob(base_name+'*.mmap')[0]
-        with np.load(base_name+'.npz') as ld:
-            TT=len(ld['shifts'])            
-#        _,_,TT=cse.utilities.load_memmap(mov_chunk_name)
-        chunk_sizes.append(TT)
-        
-        
-    num_chunks=np.sum(chunk_sizes)
-    
-    A = A_s[idx][:,neurons[idx]] 
-    nA = (A.power(2)).sum(0)
-    b = b_s[idx]
-    f = f_s[idx]
-    bckg=cb.movie(cb.to_3D(b.dot(f).T,(-1,shape[0],shape[1])),fr=33*downs_factor)
-    b_size=np.shape(bckg)[0]
-    bckg=bckg.resize(1,1,1.*num_chunks/b_size)
-    if num_chunks != bckg.shape[0]:
-        raise Exception('The number of frames are not matching')
-    counter=0
-    for jj,mv in enumerate(mvs):
-        mov_chunk_name=os.path.splitext(os.path.split(mv)[-1])[0]+'.hdf5'        
-        print mov_chunk_name
-        m=cb.load(mov_chunk_name,fr=33)
-        
-        m=m-bckg[counter:counter+chunk_sizes[jj]]            
-        counter+=chunk_sizes[jj]
-        
-#        (m).play(backend='opencv',gain=10.,fr=33)
-        m=np.reshape(m,(np.prod(shape),-1),order='F')
-        Y_r=A.T.dot(m)
-        Y_r= scipy.sparse.linalg.spsolve(scipy.sparse.spdiags(np.sqrt(nA),0,nA.size,nA.size),Y_r)
-#        Y_r=A.T.dot(Yr-)
-                               
-#%%
-nA = full(sum(A.^2))';  % energy of each row
-Y_r = spdiags(sqrt(nA),0,length(nA),length(nA))\(A'*(Y-full(b)*f)); 
-    % raw data trace filtered with ROI
-C_sorted = spdiags(sqrt(nA),0,length(nA),length(nA))*C;
-[~,ind_sor] = sort(max(C_sorted,[],2),'descend');
-figure;
-for i = 1:nr
-    plot(1:T,Y_r(ind_sor(i),:),1:T,C_sorted(ind_sor(i),:)); 
-    %title(sprintf('Sorted ROI %i, plane %i',i,ind_neur(ind_sor(i))));
-    xlabel('Timestep','fontsize',14,'fontweight','bold');
-    legend('Raw data (averaged over ROI)','Temporal Fit','fontsize',14,'fontweight','bold');
-    %subplot(212);plot(1:T,Y_r(ind_sor(i),:) - C_sorted(ind_sor(i),:));    
-    drawnow; pause; 
-end
-
-    
+    with np.load('neurons_matching.npz') as ld:
+         locals().update(ld)
+    f_results= glob('*.results_analysis.npz')
+    f_results.sort()
+    for rs in f_results:
+        print rs     
+    print '*****'        
+    A_s,C_s,YrA_s, Cn_s, b_s, f_s, shape =  gc.load_results(f_results)     
+    B_s, lab_imgs, cm_s  = gc. threshold_components(A_s,shape, min_size=5,max_size=50,max_perc=.5)
 #%%            
 for idx,B in enumerate(A_s):
      pl.subplot(2,3,idx+1)
      pl.imshow(np.reshape(B[:,neurons[idx]].sum(1),shape,order='F'))
 #%%
+num_neurons=neurons[0].size
 for neuro in range(num_neurons):
     for idx,B in enumerate(A_s):
          pl.subplot(2,3,idx+1)
@@ -238,81 +171,246 @@ for  row, column in zip(matches[idx][0],matches[idx][1]):
             
         pl.pause(.3)
 
+#%%
+tmpl_name='20160705103903_00-template_total.npz'
+with np.load(tmpl_name) as ld:
+    mov_names_each=ld['movie_names']
+
+
+traces=[]
+traces_BL=[]
+traces_DFF=[]
+all_chunk_sizes=[]
+
+for idx, mov_names in enumerate(mov_names_each):
+    idx=0
+    A=A_s[idx][:,neurons[idx]]
+#    C=C_s[idx][neurons[idx]]
+#    YrA=YrA_s[idx][neurons[idx]]
+    b=b_s[idx]
+    f=f_s[idx]
+    chunk_sizes=[]
+    for mv in mov_names:
+            base_name=os.path.splitext(os.path.split(mv)[-1])[0]
+            with np.load(base_name+'.npz') as ld:
+                TT=len(ld['shifts'])            
+            chunk_sizes.append(TT)
+
+            
+    all_chunk_sizes.append(chunk_sizes)
+
+    traces_,traces_DFF_,traces_BL_ = gc.generate_linked_traces(mov_names,chunk_sizes,A,b,f)
+    traces=traces+traces_
+    traces_DFF=traces_DFF+traces_DFF_
+    traces_BL=traces_BL+traces_BL_
 
 #%%
+np.savez('traces.npz',traces=traces,traces_BL=traces_BL,traces_DFF=traces_DFF)        
+#%%
+chunk_sizes=[]
+for idx,mvs in enumerate(mov_names_each):
+    
+    print idx 
+
+    for mv in mvs:
+        base_name=os.path.splitext(os.path.split(mv)[-1])[0]
+        with np.load(base_name+'.npz') as ld:
+            TT=len(ld['shifts'])            
+        chunk_sizes.append(TT)
+        
+        
+min_chunk=np.min(chunk_sizes)
+max_chunk=np.max(chunk_sizes)
+num_chunks=np.sum(chunk_sizes)
+#%%
+import copy
+Ftraces=copy.deepcopy(traces_DFF[:])
 
 #%%
-Ftraces=C+YrA
+interpolate=False
+CS_ALONE=0
+US_ALONE=1
+CS_US=2
 
-min_chunk=np.inf
-max_chunk=0
+samples_before=85
+samples_after=224-samples_before
 
-for fr in frames_per_chink:
-       min_chunk=np.int(np.minimum(min_chunk,fr))
-       max_chunk=np.int(np.maximum(max_chunk,fr))
 
-#%%
-Ftraces_mat=np.zeros([len(frames_per_chink),len(C),max_chunk])
-abs_frames=np.arange(max_chunk)
-idx_read=0
-crs=idxCR[idxCR>=121]-120
-nocrs=idxNOCR[idxNOCR>=121]-120
-uss=idxUS[idxUS>=121]-120
-for idx,fr in enumerate(frames_per_chink):
+if interpolate:
+    Ftraces_mat=np.zeros([len(chunk_sizes),len(traces[0]),max_chunk])
+    abs_frames=np.arange(max_chunk)
+else:    
+    Ftraces_mat=np.zeros([len(chunk_sizes),len(traces[0]),samples_after+samples_before])
+    
+crs=idxCR
+nocrs=idxNOCR
+uss=idxUS
+
+idx_trig_CS=triggers_img[:][:,0]
+idx_trig_US=triggers_img[:][:,1]
+trial_type=triggers_img[:][:,2]
+length=triggers_img[:][:,-1]
+ISI=np.int(np.nanmedian(idx_trig_US)-np.nanmedian(idx_trig_CS))
+
+for idx,fr in enumerate(chunk_sizes):
+
     print idx
+    
+    if interpolate:
 
-    if fr!=max_chunk:
-
-        f1=scipy.interpolate.interp1d(np.arange(fr) , Ftraces[:,idx_read:idx_read+fr] ,axis=1, bounds_error=False, kind='linear')  
-        Ftraces_mat[idx]=np.array(f1(abs_frames))
-        
+        if fr!=max_chunk:
+    
+            f1=scipy.interpolate.interp1d(np.arange(fr) , Ftraces[idx] ,axis=1, bounds_error=False, kind='linear')  
+            Ftraces_mat[idx]=np.array(f1(abs_frames))
+            
+        else:
+            
+            Ftraces_mat[idx]=Ftraces[idx][:,trigs_US-samples_before]
+    
+    
     else:
-        
-        Ftraces_mat[idx]=Ftraces[:,idx_read:idx_read+fr]
-    
-    
-    idx_read=idx_read+fr
+
+        if trial_type[idx] == CS_ALONE:
+                Ftraces_mat[idx]=Ftraces[idx][:,np.int(idx_trig_CS[idx]+ISI-samples_before):np.int(idx_trig_CS[idx]+ISI+samples_after)]
+        else:
+                Ftraces_mat[idx]=Ftraces[idx][:,np.int(idx_trig_US[idx]-samples_before):np.int(idx_trig_US[idx]+samples_after)]
+#%%
+np.savez('ftraces.npz',ftraces=ftraces,samples_before=samples_before,samples_after=samples_after,ISI=ISI)
+#%%
+wheel_traces, movement_at_CS, trigs_mov = gc.process_wheel_traces(np.array(res_bt['wheel']),tm,thresh_MOV_iqr=1000,time_CS_on=-.25,time_US_on=0)    
+print trigs_mov
+mn_idx_CS_US=np.intersect1d(idx_CS_US,trigs_mov['idxNO_MOV'])
+nm_idx_US=np.intersect1d(idx_US,trigs_mov['idxNO_MOV'])
+nm_idx_CS=np.intersect1d(idx_CS,trigs_mov['idxNO_MOV'])
+nm_idxCSUSCR = np.intersect1d(idxCSUSCR,trigs_mov['idxNO_MOV'])
+nm_idxCSUSNOCR = np.intersect1d(idxCSUSNOCR,trigs_mov['idxNO_MOV'])
+nm_idxCSCR = np.intersect1d(idxCSCR,trigs_mov['idxNO_MOV'])
+nm_idxCSNOCR = np.intersect1d(idxCSNOCR,trigs_mov['idxNO_MOV'])
+nm_idxNOCR = np.intersect1d(idxNOCR,trigs_mov['idxNO_MOV'])
+nm_idxCR = np.intersect1d(idxCR,trigs_mov['idxNO_MOV'])
+nm_idxUS = np.intersect1d(idxUS,trigs_mov['idxNO_MOV'])
+nm_idxCSCSUS=np.intersect1d(idxCSCSUS,trigs_mov['idxNO_MOV'])
+
+
+#%%
+threshold_responsiveness=0.1
+ftraces=Ftraces_mat.copy()       
+ftraces=ftraces-np.median(ftraces[:,:,:samples_before-ISI],axis=(0,2))[np.newaxis,:,np.newaxis]   
+amplitudes_responses=np.mean(ftraces[:,:,samples_before+ISI-1:samples_before+ISI+1],-1)
+cell_responsiveness=np.median(amplitudes_responses[nm_idxCSCSUS],axis=0)
+fraction_responsive=len(np.where(cell_responsiveness>threshold_responsiveness)[0])*1./np.shape(ftraces)[1]
+print fraction_responsive
+ftraces=ftraces[:,cell_responsiveness>threshold_responsiveness,:]
+amplitudes_responses=np.mean(ftraces[:,:,samples_before+ISI-1:samples_before+ISI+1],-1)
+#%%
+t=np.arange(-samples_before,samples_after)/f_rate
+pl.plot(t,np.median(ftraces[nm_idxCR],axis=(0,1)),'-*')
+pl.plot(t,np.median(ftraces[nm_idxNOCR],axis=(0,1)),'-d')
+pl.plot(t,np.median(ftraces[nm_idxUS],axis=(0,1)),'-o')
+plt.axvspan((-ISI)/f_rate, 0, color='g', alpha=0.2, lw=0)
+plt.axvspan(0, 0.03, color='r', alpha=0.5, lw=0)
+pl.xlabel('Time to US (s)')
+pl.ylabel('DF/F')
+pl.xlim([-.5, 1])
+pl.legend(['CR+','CR-','US'])
 #%%
 pl.close()
-for cell in range(Ftraces_mat.shape[1])[57:]:   
-    pl.cla()
+for cell in range(ftraces.shape[1]):   
+#    pl.cla()
+    pl.subplot(11,10,cell+1)
     print cell
-    tr_cr=np.median(Ftraces_mat[crs,cell,:],axis=(0))    
-    tr_nocr=np.median(Ftraces_mat[nocrs,cell,:],axis=(0))    
-    tr_us=np.median(Ftraces_mat[uss,cell,:],axis=(0))    
-    pl.plot(tr_cr,'b')
-    pl.plot(tr_nocr,'g')
-    pl.plot(tr_us,'r')
-    pl.legend(['CR+','CR-','US'])
-    pl.pause(1)
-#%%
-pl.close()
-for cell in [57,56,47,44,34,33,6,23]:
-    
-    a=np.mean(Ftraces_mat[crs,cell,28:31],-1)
-    b=np.mean(Ftraces_mat[nocrs,cell,28:31],-1)
-    tts=scipy.stats.ttest_ind(a,b)
-    tts.pvalue
-    
-    tmf=(np.arange(max_chunk)-29)/(30*.3)
-    tr_cr=np.median(Ftraces_mat[crs,cell,:],axis=(0))    
-    tr_nocr=np.median(Ftraces_mat[nocrs,cell,:],axis=(0))    
-    tr_us=np.median(Ftraces_mat[uss,cell,:],axis=(0))    
-    pl.subplot(1,2,1)
-    pl.cla()
-    pl.plot(tmf,tr_cr-np.median(tr_cr[10:23]))
-    pl.plot(tmf,tr_nocr-np.median(tr_nocr[10:23]))
-    pl.plot(tmf+ISI,tr_us-np.median(tr_us[10:30])) 
-    pl.xlim([-.5,1])
-    pl.xlabel('time from US (s)')
-    pl.ylabel('A.U.')
-    pl.legend(['CR+','CR-','US'])
-    pl.subplot(1,2,2)
+    tr_cr=np.median(ftraces[crs,cell,:],axis=(0))    
+    tr_nocr=np.median(ftraces[nocrs,cell,:],axis=(0))    
+    tr_us=np.median(ftraces[uss,cell,:],axis=(0))  
+    pl.imshow(ftraces[np.concatenate([uss,nocrs,crs]),cell,:],aspect='auto',vmin=0,vmax=1)
+    pl.xlim([samples_before-10,samples_before+10])
     pl.axis('off')
-    #cse.utilities.plot_contours(A[:,cell:cell+1],Cn,thr=0.9)
-    pl.imshow(np.reshape(A[:,cell],(512,512),order='F'),cmap='gray')
-    pl.pause(2)
+#    pl.plot(tr_cr,'b')
+#    pl.plot(tr_nocr,'g')
+#    pl.plot(tr_us,'r')
+#    pl.legend(['CR+','CR-','US'])
+#    pl.pause(1)
+#%%
+import pandas
+
+bins=np.arange(0,1,.25)
+n_bins=6
+dfs=[];
+dfs_random=[];
+x_name='ampl_eye'
+y_name='ampl_fl'
+for resps in amplitudes_responses.T:
+    idx_order=np.arange(len(idxCSCSUS))    
+    dfs.append(pandas.DataFrame(
+        {y_name: resps[idxCSCSUS[idx_order]],
+         x_name: amplitudes_at_US[idxCSCSUS]}))
+         
+    idx_order=np.random.permutation(idx_order)         
+    dfs_random.append(pandas.DataFrame(
+        {y_name: resps[idxCSCSUS[idx_order]],
+         x_name: amplitudes_at_US[idxCSCSUS]}))
+
+
+r_s=[]
+r_ss=[]
+
+for df,dfr in zip(dfs,dfs_random): # random scramble
+
+    if bins is None:
+        [_,bins]=np.histogram(dfr.ampl_eye,n_bins)         
+    groups = dfr.groupby(np.digitize(dfr.ampl_eye, bins))
+    grouped_mean = groups.mean()
+    grouped_sem = groups.sem()
+    (r,p_val)=scipy.stats.pearsonr(grouped_mean.ampl_eye,grouped_mean.ampl_fl)
+#    r=np.corrcoef(grouped_mean.ampl_eye,grouped_mean.ampl_fl)[0,1]
     
+    r_ss.append(r)
+    
+    if bins is None:
+        [_,bins]=np.histogram(df.ampl_eye,n_bins)         
+
+    groups = df.groupby(np.digitize(df.ampl_eye, bins))    
+    grouped_mean = groups.mean()
+    grouped_sem= groups.sem()    
+    (r,p_val)=scipy.stats.pearsonr(grouped_mean.ampl_eye,grouped_mean.ampl_fl)
+#    r=np.corrcoef(grouped_mean.ampl_eye,grouped_mean.ampl_fl)[0,1]
+    r_s.append(r)    
+    if r_s[-1]>.98:
+        pl.subplot(1,2,1)
+        print 'found'
+        pl.errorbar(grouped_mean.ampl_eye,grouped_mean.ampl_fl,grouped_sem.ampl_fl.as_matrix(),grouped_sem.ampl_eye.as_matrix(),fmt='.')
+        pl.scatter(grouped_mean.ampl_eye,grouped_mean.ampl_fl,s=groups.apply(len).values*3)#
+        pl.xlabel(x_name)
+        pl.ylabel(y_name)
+
+mu_scr=np.mean(r_ss)
+std_scr=np.std(r_ss)
+[a,b]=np.histogram(r_s,20)
+
+pl.subplot(1,2,2)
+pl.plot(b[1:],scipy.signal.savgol_filter(a,3,1))  
+plt.axvspan(mu_scr-std_scr, mu_scr+std_scr, color='r', alpha=0.2, lw=0)
+pl.xlabel('correlation coefficients')
+pl.ylabel('bin counts')
+
+
+
+#%%
+r_s=[]
+for resps in amplitudes_responses.T:
+    r=np.corrcoef(amplitudes_at_US[idxCSCSUS],resps[idxCSCSUS])[0,1]    
+#    if r>.25: 
+#        pl.scatter(amplitudes_at_US[idxCSCSUS],resps[idxCSCSUS])
+#    bins=np.arange(-.3,1.5,.2)
+#    a,b=np.histogram(resps,bins)
+#    new_dat=[]
+#    for bb in a:
+#        
+    r_s.append(r)
+    pl.xlabel('Amplitudes CR')
+    pl.ylabel('Amplitudes GC responses')
+
+pl.hist(r_s)    
 #%%        
 
 #
@@ -455,7 +553,7 @@ b, a = signal.butter(8, [.05, .5] ,'bandpass')
 pl.plot(np.mean(m1,(1,2))-80)
 pl.plot(signal.lfilter(b,a,np.mean(m1,(1,2))),linewidth=2)
 #%%
-m1.play(backend='opencv',gain=1.,fr=30,magnification=3)
+m1.play(backend='opencv',gain=1.,fr=f_rate,magnification=3)
 #%% NMF
 comps, tim,_=cb.behavior.extract_components(np.maximum(0,m1-np.min(m1,0)),n_components=4,init='nndsvd',l1_ratio=1,alpha=0,max_iter=200,verbose=True)
 pl.plot(np.squeeze(np.array(tim)).T)
