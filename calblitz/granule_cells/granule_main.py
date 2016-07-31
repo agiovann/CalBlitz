@@ -37,28 +37,31 @@ from ipyparallel import Client
 import calblitz as cb
 from calblitz.granule_cells import utils_granule as gc
 #%%
-with np.load(glob('*_ImgDescr.npz')[0]) as ld:
-    f_rate=ld['image_descriptions'][0]['scanimage.SI.hRoiManager.scanFrameRate']
+base_folder='/mnt/ceph/users/agiovann/ImagingData/eyeblink/b35/20160714143248/'
+img_descr=cb.utils.get_image_description_SI(glob(base_folder+'2016*.tif')[0])[0]
+f_rate=img_descr['scanimage.SI.hRoiManager.scanFrameRate']
+print f_rate    
 #%%
 fls=glob('2016*.tif')     
-
 fls.sort()     
-triggers,trigger_names=extract_triggers(fls,read_dictionaries=False)    
- 
-np.savez('all_triggers.npz',triggers=triggers,trigger_names=trigger_names)   
+print fls 
+# verufy they are ordered 
+#%%
+triggers_img,trigger_names_img=gc.extract_triggers(fls,read_dictionaries=False)     
+np.savez('all_triggers.npz',triggers=triggers_img,trigger_names=trigger_names_img)   
 #%% get information from eyelid traces
 t_start=time()     
-res_bt=gc.get_behavior_traces('20160705103903_cam2.h5',t0=0,t1=8.0,freq=60,ISI=.25,draw_rois=False,plot_traces=False,mov_filt_1d=True,window_lp=5)   
+camera_file=glob('*_cam2.h5')
+assert len(camera_file)==1, 'there are two camera files'    
+res_bt=gc.get_behavior_traces(camera_file[0],t0=0,t1=8.0,freq=60,ISI=.25,draw_rois=False,plot_traces=False,mov_filt_1d=True,window_lp=5)   
 t_end=time()-t_start
 print t_end
 #%%
-np.savez('behavioral_traces.npz',res_bt=res_bt)
-#%%   
-with np.load('all_triggers.npz') as at:
-    triggers_img=at['triggers']
-    trigger_names_img=at['trigger_names']  
+np.savez(base_folder+'behavioral_traces.npz',res_bt=res_bt)
 #%%
 tm=res_bt['time']
+f_rate_bh=1/np.median(np.diff(tm))
+ISI=res_bt['trial_info'][0][3]-res_bt['trial_info'][0][2]
 eye_traces=np.array(res_bt['eyelid'])
 idx_CS_US=res_bt['idx_CS_US']
 idx_US=res_bt['idx_US']
@@ -76,21 +79,30 @@ idxCR = trig_CRs['idxCR']
 idxUS = trig_CRs['idxUS']
 idxCSCSUS=np.concatenate([idx_CS,idx_CS_US])
 
+
+
 pl.plot(tm,np.mean(eye_traces[idxCSUSCR],0))       
 pl.plot(tm,np.mean(eye_traces[idxCSUSNOCR],0))     
 pl.plot(tm,np.mean(eye_traces[idxCSCR],0))
 pl.plot(tm,np.mean(eye_traces[idxCSNOCR],0))    
 pl.plot(tm,np.mean(eye_traces[idx_US],0))
 pl.legend(['idxCSUSCR','idxCSUSNOCR','idxCSCR','idxCSNOCR','idxUS'])
+pl.xlabel('time to US (s)')
+pl.ylabel('eyelid closure')
+plt.axvspan(-ISI,ISI, color='g', alpha=0.2, lw=0)
+plt.axvspan(0,0.03, color='r', alpha=0.2, lw=0)
 
 pl.xlim([-.5,1])
+pl.savefig(base_folder+'behavioral_traces.pdf')
 #%%
+pl.close()
 bins=np.arange(0,1,.01)
 pl.hist(amplitudes_at_US[idxCR],bins=bins)
 pl.hist(amplitudes_at_US[idxNOCR],bins=bins)
 
 
-#%% 
+#%%
+pl.close() 
 f_results= glob('*.results_analysis.npz')
 f_results.sort()
 for rs in f_results:
@@ -106,10 +118,9 @@ for i,A_ in enumerate(B_s):
 #%% compute mask distances 
 max_dist=30
 D_s=gc.distance_masks(B_s,cm_s,max_dist)       
-np.savez('distance_masks.npz',D_s=D_s)
+np.savez(base_folder+'distance_masks.npz',D_s=D_s)
 #%%
-with np.load('distance_masks.npz') as ld:
-    D_s=ld['D_s']
+
 #%%
 for ii,D in enumerate(D_s):
     pl.subplot(3,3,ii+1)
@@ -117,11 +128,11 @@ for ii,D in enumerate(D_s):
 #%% find matches
 matches,costs =  gc.find_matches(D_s, print_assignment=False)
 #%%
-neurons=link_neurons(matches,costs,max_cost=0.6,min_FOV_present=None)
+neurons=gc.link_neurons(matches,costs,max_cost=0.6,min_FOV_present=None)
 #%%
-np.savez('neurons_matching.npz',matches=matches,costs=costs,neurons=neurons,D_s=D_s)
+np.savez(base_folder+'neurons_matching.npz',matches=matches,costs=costs,neurons=neurons,D_s=D_s)
 #%%
-if 1:
+if 0:
     import calblitz as cb
     from calblitz.granule_cells import utils_granule as gc
     from glob import glob
@@ -130,10 +141,15 @@ if 1:
     import scipy 
     import pylab as pl
     import ca_source_extraction as cse
-    
-    with np.load('neurons_matching.npz') as ld:
+       
+    with np.load(base_folder+'distance_masks.npz') as ld:
+        D_s=ld['D_s']
+    with np.load(base_folder+'all_triggers.npz') as at:
+        triggers_img=at['triggers']
+        trigger_names_img=at['trigger_names'] 
+    with np.load(base_folder+'neurons_matching.npz') as ld:
          locals().update(ld)
-    f_results= glob('*.results_analysis.npz')
+    f_results= glob(base_folder+'*.results_analysis.npz')
     f_results.sort()
     for rs in f_results:
         print rs     
@@ -156,23 +172,21 @@ for neuro in range(num_neurons):
         pl.cla()       
 
 #%%
-idx=0
-for  row, column in zip(matches[idx][0],matches[idx][1]):
-    value = D_s[idx][row,column]
-    if value < .5:
-#        pl.subplot(1,2,1)
-        pl.cla() 
-        pl.imshow(np.reshape(B_s[idx][:,row].todense(),(512,512),order='F'),cmap='gray',interpolation='None')    
-#        pl.subplot(1,2,2)
-#        pl.cla() 
-        pl.imshow(np.reshape(B_s[idx+1][:,column].todense(),(512,512),order='F'),alpha=.5,cmap='hot',interpolation='None')               
-        if B_s[idx][:,row].T.dot(B_s[idx+1][:,column]).todense() == 0:
-            print 'Flaw'
-            
-        pl.pause(.3)
+if 0:
+    idx=0
+    for  row, column in zip(matches[idx][0],matches[idx][1]):
+        value = D_s[idx][row,column]
+        if value < .5:
+            pl.cla() 
+            pl.imshow(np.reshape(B_s[idx][:,row].todense(),(512,512),order='F'),cmap='gray',interpolation='None')    
+            pl.imshow(np.reshape(B_s[idx+1][:,column].todense(),(512,512),order='F'),alpha=.5,cmap='hot',interpolation='None')               
+            if B_s[idx][:,row].T.dot(B_s[idx+1][:,column]).todense() == 0:
+                print 'Flaw'            
+            pl.pause(.3)
 
 #%%
-tmpl_name='20160705103903_00-template_total.npz'
+tmpl_name=glob('*template_total.npz')[0]
+print tmpl_name
 with np.load(tmpl_name) as ld:
     mov_names_each=ld['movie_names']
 
@@ -205,13 +219,17 @@ for idx, mov_names in enumerate(mov_names_each):
     traces_BL=traces_BL+traces_BL_
 
 #%%
-np.savez('traces.npz',traces=traces,traces_BL=traces_BL,traces_DFF=traces_DFF)        
+import pickle
+with open('traces.pk','w') as f: 
+    pickle.dump(dict(traces=traces,traces_BL=traces_BL,traces_DFF=traces_DFF),f)   
+
+#%%
+with open('traces.pk','r') as f:    
+    locals().update(pickle.load(f)   )
 #%%
 chunk_sizes=[]
-for idx,mvs in enumerate(mov_names_each):
-    
+for idx,mvs in enumerate(mov_names_each):    
     print idx 
-
     for mv in mvs:
         base_name=os.path.splitext(os.path.split(mv)[-1])[0]
         with np.load(base_name+'.npz') as ld:
@@ -273,8 +291,7 @@ for idx,fr in enumerate(chunk_sizes):
         if trial_type[idx] == CS_ALONE:
                 Ftraces_mat[idx]=Ftraces[idx][:,np.int(idx_trig_CS[idx]+ISI-samples_before):np.int(idx_trig_CS[idx]+ISI+samples_after)]
         else:
-                Ftraces_mat[idx]=Ftraces[idx][:,np.int(idx_trig_US[idx]-samples_before):np.int(idx_trig_US[idx]+samples_after)]
-#%%
+                Ftraces_mat[idx]=Ftraces[idx][:,np.int(idx_trig_US[idx]-samples_before):np.int(idx_trig_US[idx]+samples_after)]#%%
 np.savez('ftraces.npz',ftraces=ftraces,samples_before=samples_before,samples_after=samples_after,ISI=ISI)
 #%%
 wheel_traces, movement_at_CS, trigs_mov = gc.process_wheel_traces(np.array(res_bt['wheel']),tm,thresh_MOV_iqr=1000,time_CS_on=-.25,time_US_on=0)    
@@ -302,7 +319,7 @@ fraction_responsive=len(np.where(cell_responsiveness>threshold_responsiveness)[0
 print fraction_responsive
 ftraces=ftraces[:,cell_responsiveness>threshold_responsiveness,:]
 amplitudes_responses=np.mean(ftraces[:,:,samples_before+ISI-1:samples_before+ISI+1],-1)
-#%%
+#%%pl.close()
 t=np.arange(-samples_before,samples_after)/f_rate
 pl.plot(t,np.median(ftraces[nm_idxCR],axis=(0,1)),'-*')
 pl.plot(t,np.median(ftraces[nm_idxNOCR],axis=(0,1)),'-d')
@@ -333,7 +350,7 @@ for cell in range(ftraces.shape[1]):
 #%%
 import pandas
 
-bins=np.arange(0,1,.25)
+bins=np.arange(-.1,.3,.05)
 n_bins=6
 dfs=[];
 dfs_random=[];
@@ -375,7 +392,7 @@ for df,dfr in zip(dfs,dfs_random): # random scramble
     (r,p_val)=scipy.stats.pearsonr(grouped_mean.ampl_eye,grouped_mean.ampl_fl)
 #    r=np.corrcoef(grouped_mean.ampl_eye,grouped_mean.ampl_fl)[0,1]
     r_s.append(r)    
-    if r_s[-1]>.98:
+    if r_s[-1]>.86:
         pl.subplot(1,2,1)
         print 'found'
         pl.errorbar(grouped_mean.ampl_eye,grouped_mean.ampl_fl,grouped_sem.ampl_fl.as_matrix(),grouped_sem.ampl_eye.as_matrix(),fmt='.')
@@ -384,8 +401,9 @@ for df,dfr in zip(dfs,dfs_random): # random scramble
         pl.ylabel(y_name)
 
 mu_scr=np.mean(r_ss)
+
 std_scr=np.std(r_ss)
-[a,b]=np.histogram(r_s,20)
+[a,b]=np.histogram(r_s,20)s
 
 pl.subplot(1,2,2)
 pl.plot(b[1:],scipy.signal.savgol_filter(a,3,1))  

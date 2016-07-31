@@ -47,8 +47,9 @@ from scipy.ndimage import filters as ft
 res=[]
 with open('file_list.txt') as f:
     for ln in f:
-        print(ln[:-1])
-        with  h5py.File(ln[:-1]) as hh:
+        ln1=ln[:-1]
+        print(ln1)
+        with  h5py.File(ln1) as hh:
             print hh.keys()
             mov=np.array(hh['binnedF'],dtype=np.float32)
             mov=cb.movie(mov,fr=3)
@@ -60,12 +61,33 @@ with open('file_list.txt') as f:
             mov=mov.resize(1,1,.3)
     #        mov=mov-np.percentile(mov,1)
             
-            mov.save(ln[:-4] + '_compress_.tif')
-            mov1.save(ln[:-4] + '_BL_compress_.tif')
+            mov.save(ln1[:-3] + '_compress_.tif')
+            mov1.save(ln1[:-3] + '_BL_compress_.tif')
             
-            res.append(ln[:-4] + '_compress_.tif')
-            res.append(ln[:-4] + '_BL_compress_.tif')
+            res.append(ln1[:-3] + '_compress_.tif')
+            res.append(ln1[:-3] + '_BL_compress_.tif')
+#%% extract correlation image
+
+with open('file_list.txt') as f:
+    for ln in f:
+        
+        ln1=ln[:ln.find('summary')]
+        print(ln1)
+        with  h5py.File(ln1 +'summary.mat') as hh:
+            print hh.keys()
+            mov=np.array(hh['binnedF'],dtype=np.float32)
+            mov=cb.movie(mov,fr=3)
+            img=cb.movie(mov.local_correlations(eight_neighbours=True),fr=1)
             
+            img.save(ln1[:-3] + 'summary._correlation_image_full.tif')
+
+#%%
+with open('file_list.txt') as f:
+    for ln in f:        
+        ln1=ln[:ln.find('summary')]
+        print(ln1)      
+        ffinal=ln1[:-3] + 'summary._correlation_image_full.tif'
+        shutil.copyfile(ffinal,os.path.join('./correlation_images/',os.path.split(ffinal)[-1]))                      
 #%% Create images for Labeling
 from glob import glob
 import scipy.stats as st

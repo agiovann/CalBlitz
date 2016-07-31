@@ -34,18 +34,18 @@ import pylab as pl
 import psutil
 import calblitz as cb
 from ipyparallel import Client
-#%%
+import os
+import numpy as np
 #%%
 backend='SLURM'
 if backend == 'SLURM':
     n_processes = np.int(os.environ.get('SLURM_NPROCS'))
 else:
-    n_processes = np.maximum(np.int(psutil.cpu_count()*.75),1) # roughly number of cores on your machine minus 1
+    n_processes = np.maximum(np.int(psutil.cpu_count()),1) # roughly number of cores on your machine minus 1
 print 'using ' + str(n_processes) + ' processes'
 
 #%% start cluster for efficient computation
 single_thread=False
-backend='local'
 if single_thread:
     dview=None
 else:    
@@ -76,7 +76,7 @@ else:
 import os
 fnames=[]
 for file in os.listdir("./"):
-    if file.startswith("20160712173043_") and file.endswith(".tif"):
+    if file.startswith("2016") and file.endswith(".tif"):
         fnames.append(os.path.abspath(file))
 fnames.sort()
 print fnames  
@@ -115,13 +115,16 @@ for f in  fnames:
 #%%
 all_movs=cb.movie(np.concatenate(all_movs,axis=0),fr=30)        
 all_movs,shifts,_,_=all_movs.motion_correct(template=np.median(all_movs,axis=0))
-all_movs.play(backend='opencv',gain=75.)
+all_movs.play(backend='opencv',gain=1.,fr=10)
 #%%
 all_movs=np.array(all_movs)
 #%%
-num_movies_per_chunk=30        
-chunks=range(0,len(fnames),num_movies_per_chunk)
-chunks[-1]=len(fnames)
+num_movies_per_chunk=50      
+if num_movies_per_chunk < len(fnames):  
+    chunks=range(0,len(fnames),num_movies_per_chunk)
+    chunks[-1]=len(fnames)
+else:
+    chunks=[0, len(fnames)]
 print chunks
 movie_names=[]
 
@@ -147,7 +150,7 @@ for idx in range(len(chunks)-1):
 np.savez(base_name+'-template_total.npz',template_each=template_each, all_movs_each=np.array(all_movs_each),movie_names=movie_names)        
 #%%
 for idx,mov in enumerate(all_movs_each):
-    mov.play(backend='opencv',gain=50.,fr=100)
+    mov.play(backend='opencv',gain=2.,fr=10)
 #    mov.save(str(idx)+'sam_example.tif')
 #%%
 
@@ -180,8 +183,7 @@ for mov_names_each in movie_names:
         #idx_y=slice(12,500,None)
         #idx_xy=(idx_x,idx_y)
     idx_xy=None
-    name_new=cse.utilities.save_memmap_each(movie_names_hdf5, dview=dview,base_name=None, resize_fact=(1, 1, .2), remove_init=0,idx_xy=idx_xy )
-    name_new.sort()    
+8    name_new.sort()    
     names_new_each.append(name_new)
     print name_new
 #%%
@@ -193,5 +195,5 @@ fnames_new_each=dview.map_sync(cse.utilities.save_memmap_join,names_new_each)
 
 #%%
 m=cb.load(fnames_new_each[-1],fr=5)
-m.play(backend='opencv',gain=50.,fr=30)
+m.play(backend='opencv',gain=2.,fr=30)
 #%%
