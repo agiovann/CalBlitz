@@ -960,7 +960,7 @@ def load(file_name,fr=None,start_time=0,meta_data=None,subindices=None,shape=Non
             
         name,extension = os.path.splitext(file_name)[:2]
 
-        if extension == '.tif': # load avi file
+        if extension == '.tif' or extension == '.tiff' : # load avi file
             print('Loading tif...')
             if subindices is not None:
                 input_arr=imread(file_name)[subindices,:,:]
