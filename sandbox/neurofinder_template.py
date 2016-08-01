@@ -40,11 +40,13 @@ import scipy
 from ipyparallel import Client
 
 #%%
-fname_mov='neuro_0101.tif'
+folder_in='/mnt/ceph/users/agiovann/ImagingData/LABELLING/NEUROFINDER/04.00'
+fname_mov=os.path.split(folder_in)[-1] + 'MOV.tif'
+print fname_mov
 files=sorted(glob('images/*.tiff'))
 #%% LOAD MOVIE HERE USE YOUR METHOD, Movie is frames x dim2 x dim2
 m=cb.load_movie_chain(files,fr=30)
-#m.save(fname_mov)
+m.save(fname_mov)
 
 #%%
 backend = 'local'
@@ -100,7 +102,7 @@ pl.imshow(Cn,cmap='gray')
 #%%
 rf=15 # half-size of the patches in pixels. rf=25, patches are 50x50
 stride = 2 #amounpl.it of overlap between the patches in pixels    
-K=4 # number of neurons expected per patch
+K=5 # number of neurons expected per patch
 gSig=[5,5] # expected half size of neurons
 merge_thresh=0.8 # merging threshold, max correlation allowed
 p=2 #order of the autoregressive system
@@ -169,7 +171,7 @@ quality_threshold=-0
 traces=C2+YrA
 idx_components, fitness, erfc = cse.utilities.evaluate_components(traces,N=5,robust_std=False)
 idx_components=idx_components[fitness<quality_threshold]
-_,_,idx_components=cse.utilities.order_components(A2,C2)
+#_,_,idx_components=cse.utilities.order_components(A2,C2)
 print(idx_components.size*1./traces.shape[0])
 #%%
 pl.figure();
@@ -182,6 +184,8 @@ if save_results:
     scipy.io.savemat('output_analysis_matlab.mat',{'A2':A2,'C2':C2 , 'YrA':YrA, 'S2': S2 ,'YrA': YrA, 'd1':d1,'d2':d2,'idx_components':idx_components, 'fitness':fitness })
 #%%
 if save_results:
+    %load_ext autoreload
+    %autoreload 2
     import sys
     import numpy as np
     import ca_source_extraction as cse
@@ -195,7 +199,7 @@ if save_results:
     with np.load('results_analysis.npz')  as ld:
           locals().update(ld)
     
-    fname_new='Yr0_d1_512_d2_512_d3_1_order_C_frames_600_.mmap'
+    fname_new=glob('Yr0*_.mmap')[0]
     
     Yr,(d1,d2),T=cse.utilities.load_memmap(fname_new)
     d,T=np.shape(Yr)
@@ -209,227 +213,144 @@ if save_results:
     cse.utilities.view_patches_bar(Yr,A2.tocsc()[:,idx_components],C2[idx_components,:],b2,f2, d1,d2, YrA=YrA[idx_components,:])  
     dims=(d1,d2)
 
-#%%
-import cv2
-import numpy as np
-from matplotlib import pyplot as plt
-from scipy import ndimage as ndi
-from skimage.feature import canny
-from skimage.filters import sobel
-from skimage.morphology import watershed
-import skimage
- 
-def extract_binary_masks_blob(A, neuron_radius,max_fraction=.3, minCircularity= 0.2, minInertiaRatio = 0.2,minConvexity = .2):
-    """
-    Function to extract masks from data. It will also perform a preliminary selectino of good masks based on criteria like shape and size
-    
-    Parameters:
-    ----------
-    A: scipy.sparse matris
-        contains the components as outputed from the CNMF algorithm
-        
-    neuron_radius: float 
-        neuronal radius employed in the CNMF settings (gSiz)
-    
-    max_fraction: float
-        fraction of the maximum of a components use to threshold the 
-    
-    min_elevation_map=30
-    
-    max_elevation_map=150
-    
-    minCircularity= 0.2
-    
-    minInertiaRatio = 0.2
-    
-    minConvexity = .2
-    
-    Returns:
-    --------
-    
-    """    
 
-    params = cv2.SimpleBlobDetector_Params()
-    params.minCircularity = minCircularity
-    params.minInertiaRatio = minInertiaRatio 
-    params.minConvexity = minConvexity    
-    
-    # Change thresholds
-    params.blobColor=255
-    
-    params.minThreshold = 0.5
-    params.maxThreshold = 1.5
-    params.thresholdStep= .5
-    
-    min_elevation_map=max_fraction*255
-    max_elevation_map=0.9*255
-    
-    params.minArea = np.pi*((neuron_radius*.75)**2)
-    #params.maxArea = 4*np.pi*((gSig[0]-1)**2)
-    
-    
-    
-    params.filterByArea = True
-    params.filterByCircularity = True
-    params.filterByConvexity = True
-    params.filterByInertia = True
-    
-    detector = cv2.SimpleBlobDetector_create(params)
-    
-    
-    masks_ws=[]
-    pos_examples=[] 
-    neg_examples=[]
-
-
-    for count,comp in enumerate(A.tocsc()[:].T):
-
-        print count
-        comp_d=np.array(comp.todense())
-        comp_d=comp_d*(comp_d>(np.max(comp_d)*.3))
-        comp_orig=np.reshape(comp.todense(),dims,order='F')
-        comp_orig=(comp_orig-np.min(comp_orig))/(np.max(comp_orig)-np.min(comp_orig))*255
-        gray_image=np.reshape(comp_d,dims,order='F')
-        gray_image=(gray_image-np.min(gray_image))/(np.max(gray_image)-np.min(gray_image))*255
-        gray_image=gray_image.astype(np.uint8)    
-
-        
-        # segment using watershed
-        markers = np.zeros_like(gray_image)
-        elevation_map = sobel(gray_image)
-        markers[gray_image < min_elevation_map] = 1
-        markers[gray_image > max_elevation_map] = 2    
-        edges = watershed(elevation_map, markers)-1
-         
-        # only keep largest object 
-        label_objects, nb_labels = ndi.label(edges)
-        sizes = np.bincount(label_objects.ravel())
-        idx_largest = np.argmax(sizes[1:])    
-        edges=(label_objects==(1+idx_largest))
-        edges=ndi.binary_fill_holes(edges)
-        
-        
-        masks_ws.append(edges)
-        keypoints = detector.detect(edges.astype(np.uint8)*200)
-        
-        if len(keypoints)>0:
-    #        im_with_keypoints = cv2.drawKeypoints(gray_image, keypoints, np.array([]), (0,0,255), cv2.DRAW_MATCHES_FLAGS_DRAW_RICH_KEYPOINTS)
-            pos_examples.append(count)
-
-        else:
-            
-            neg_examples.append(count)
-
-    return np.array(masks_ws),np.array(pos_examples),np.array(neg_examples)
 #%% extract binary masks
-min_radius=gSig[0]
-masks_ws,pos_examples,neg_examples=cse.utilities.extract_binary_masks_blob(A2, min_radius, dims, max_fraction=.3, minCircularity= 0.2, minInertiaRatio = 0.2,minConvexity = .2)
+min_radius=5
+masks_ws,pos_examples,neg_examples=cse.utilities.extract_binary_masks_blob(
+A2.tocsc()[:,:], min_radius, dims, num_std_threshold=1, 
+minCircularity= 0.5, minInertiaRatio = 0.2,minConvexity = .8)
+
 #%%
 pl.subplot(1,2,1)
 final_masks=np.array(masks_ws)[pos_examples]
-pl.imshow(np.reshape(final_masks.mean(0),dims,order='F'),vmax=.001)
+pl.imshow(np.reshape(final_masks.max(0),dims,order='F'),vmax=1)
+pl.title('Positive examples')
 pl.subplot(1,2,2)
 neg_examples_masks=np.array(masks_ws)[neg_examples]
-pl.imshow(np.reshape(neg_examples_masks.mean(0),dims,order='F'),vmax=.001)
+pl.imshow(np.reshape(neg_examples_masks.max(0),dims,order='F'),vmax=1)
+pl.title('Negative examples')
 #%%
-areas=np.sum(masks_ws,axis=(1,2))
-min_area=(min_radius**2)*np.pi/2
-quality_threshold=-15
-traces=C2+YrA
-idx_components, fitness, erfc = cse.utilities.evaluate_components(traces,N=5,robust_std=False)
+crd = cse.utilities.plot_contours(A2.tocsc()[:,pos_examples],Cn,thr=0.9)
+#%%
+masks_ben=cse.utilities.nf_read_roi_zip('neurofinder01.01_combined.zip',dims)
+masks_nf=cse.utilities.nf_load_masks('regions/regions.json',dims)
 
-idx_components=np.where(np.logical_and(fitness<quality_threshold , areas >= min_area))[0]
-#_,_,idx_components=cse.utilities.order_components(A2,C2)
-print(idx_components.size*1./traces.shape[0])
-#%%
-pl.subplot(1,2,1)
-final_masks=np.array(masks_ws)[np.union1d(pos_examples,idx_components)]
-pl.imshow(np.reshape(final_masks.mean(0),dims,order='F'),vmax=.001)
-pl.subplot(1,2,2)
-neg_examples_masks=np.array(masks_ws)[np.setdiff1d(neg_examples,idx_components)]
-pl.imshow(np.reshape(neg_examples_masks.mean(0),dims,order='F'),vmax=.001)
-#%%
-fname='regions_cnmf.json'
-regions_cnmf=cse.utilities.nf_masks_to_json( final_masks,fname)
-#%%
-
-#%%
+#%
 # load the images
-masks=cse.utilities.nf_load_masks('regions/regions.json',np.shape(m)[1:])
 # show the outputs
 plt.figure()
 plt.subplot(2, 2, 1)
-plt.imshow(final_masks.sum(axis=0), cmap='gray')
+plt.imshow(final_masks.sum(axis=0), cmap='hot')
+pl.imshow(Cn,cmap='gray',alpha=.8)
+pl.title('CNMF')
 plt.subplot(2, 2, 2)
-plt.imshow(masks.sum(axis=0), cmap='gray')
+plt.imshow(masks_nf.sum(axis=0), cmap='hot')
+pl.imshow(Cn,cmap='gray',alpha=.8)
+pl.title('NEUROFINDER')
 plt.subplot(2, 2, 3)
-pl.imshow(np.reshape(A2.mean(1),dims,order='F'),vmax=.0005)
-plt.imshow(masks.sum(axis=0), alpha=.3,cmap='hot')
+plt.imshow(masks_ben.sum(0), cmap='hot')
+pl.imshow(Cn,cmap='gray',alpha=.8)
+pl.title('BEN')
 plt.subplot(2, 2, 4)
-pl.imshow(m.sum(0),cmap='gray')
-plt.imshow(masks.sum(axis=0), alpha=.2,cmap='hot')
+pl.imshow(np.reshape(A2.tocsc()[:,:].sum(1),dims,order='F'),cmap='hot')
+plt.imshow(Cn, alpha=.5,cmap='gray')
+pl.title('A MATRIX')
 plt.show()
 #%%
-pl.imshow(np.std(m,0),cmap='gray',vmax=1000)
-
+regions_CNMF=cse.utilities.nf_masks_to_json( final_masks,'regions_CNMF.json')
+regions_BEN=cse.utilities.nf_masks_to_json( masks_ben,'regions_ben.json')
 #%%
-pl.close()
-neg_examples_masks=np.array(masks_ws)[np.sort(neg_examples)][240:241]
-pl.imshow(np.mean(neg_examples_masks,0))
-#%%
-params = cv2.SimpleBlobDetector_Params()
-params.blobColor=255
-params.minThreshold = max_fraction*255;
-params.maxThreshold = 255;
-params.thresholdStep= 10
-params.minArea = np.pi*((gSig[0]-1)**2)
-params.minCircularity= 0.2
-params.minInertiaRatio = 0.2
-params.filterByArea = False
-params.filterByCircularity = True
-params.filterByConvexity = True
-params.minConvexity = .2
-params.filterByInertia = True
-detector = cv2.SimpleBlobDetector_create(params)
-for m in neg_examples_masks:
-    m1=m.astype(np.uint8)*200    
-    m1=ndi.binary_fill_holes(m1)
-    keypoints = detector.detect(m1.astype(np.uint8)*200)
-    if len(keypoints)>0:
-        pl.cla()
-        pl.imshow(np.reshape(m,dims,order='F'),vmax=.001)
-        pl.pause(1)
-    else:
-        print 'skipped'
-
-#pl.colorbar()
-#%%
-
-#%%
-masks_ben=ut.nf_read_roi_zip('neurofinder01.01_combined.zip',dims)
-regions2=cse.utilities.nf_masks_to_json( masks_ben,'masks_ben.json')
-pl.imshow(np.sum(masks_ben>0,0)>0)
-pl.pause(3)
-pl.imshow(5*np.sum(masks,0),alpha=.3)
-
-#%%
-# load the images
-masks=cse.utilities.nf_load_masks('regions/regions.json',np.shape(m)[1:])
-# show the outputs
-plt.figure()
-plt.subplot(1, 2, 1)
-plt.imshow(m.sum(axis=0), cmap='gray')
-plt.subplot(1, 2, 2)
-plt.imshow(masks.sum(axis=0), cmap='gray')
-plt.show()
-#%%
-fname='regions_2.json'
-regions2=cse.utilities.nf_masks_to_json(np.roll( masks,20,axis=1) ,fname)
-#regions2=cse.utilities.nf_masks_to_json(masks,fname)
-#%%  
 from neurofinder import match,load,centers,shapes
 a=load('regions/regions.json')
-b=load(fname)
-print match(a,b,threshold=90)
-print centers(a,b,threshold=30)
-print shapes(a,b)
+b=load('regions_ben.json')
+#print match(a,b,threshold=5)
+re,pr=centers(a,b,threshold=5)
+incl,excl=shapes(a,b,threshold=5)
+fscore=2*(pr*re)/(pr+re)
+print 'Exclusion %.3f\nRecall %.3f\nCombined %.3f\nPrecision %.3f\nInclusion %.3f\n' % (excl,re,fscore,pr,incl)
+#%%
+from neurofinder import match,load,centers,shapes
+a=load('regions/regions.json')
+b=load('regions_CNMF.json')
+#print match(a,b,threshold=5)
+re,pr=centers(a,b,threshold=5)
+incl,excl=shapes(a,b,threshold=5)
+fscore=2*(pr*re)/(pr+re)
+print 'Exclusion %.3f\nRecall %.3f\nCombined %.3f\nPrecision %.3f\nInclusion %.3f\n' % (excl,re,fscore,pr,incl)
+#%%
+a=load('regions_CNMF.json')
+b=load('regions_ben.json')
+#print match(a,b,threshold=5)
+re,pr=centers(a,b,threshold=5)
+incl,excl=shapes(a,b,threshold=5)
+fscore=2*(pr*re)/(pr+re)
+print 'Exclusion %.3f\nRecall %.3f\nCombined %.3f\nPrecision %.3f\nInclusion %.3f\n' % (excl,re,fscore,pr,incl)
+
+
+#%% ANDREA's JUNK 
+
+#quality_threshold=-25
+#traces=C2+YrA
+#idx_components, fitness, erfc = cse.utilities.evaluate_components(traces,N=5,robust_std=False)
+#
+#idx_components=np.where(fitness<quality_threshold)[0]
+##_,_,idx_components=cse.utilities.order_components(A2,C2)
+#print(idx_components.size*1./traces.shape[0])
+##%%
+#pl.subplot(1,2,1)
+#final_masks=np.array(masks_ws)[np.union1d(pos_examples,idx_components)]
+#pl.imshow(np.reshape(final_masks.mean(0),dims,order='F'),vmax=.001)
+#pl.subplot(1,2,2)
+#neg_examples_masks=np.array(masks_ws)[np.setdiff1d(neg_examples,idx_components)]
+#pl.imshow(np.reshape(neg_examples_masks.mean(0),dims,order='F'),vmax=.001)
+##%%
+#params = cv2.SimpleBlobDetector_Params()
+#params.blobColor=255
+#params.minThreshold = max_fraction*255;
+#params.maxThreshold = 255;
+#params.thresholdStep= 10
+#params.minArea = np.pi*((gSig[0]-1)**2)
+#params.minCircularity= 0.2
+#params.minInertiaRatio = 0.2
+#params.filterByArea = False
+#params.filterByCircularity = True
+#params.filterByConvexity = True
+#params.minConvexity = .2
+#params.filterByInertia = True
+#detector = cv2.SimpleBlobDetector_create(params)
+#for m in neg_examples_masks:
+#    m1=m.astype(np.uint8)*200    
+#    m1=ndi.binary_fill_holes(m1)
+#    keypoints = detector.detect(m1.astype(np.uint8)*200)
+#    if len(keypoints)>0:
+#        pl.cla()
+#        pl.imshow(np.reshape(m,dims,order='F'),vmax=.001)
+#        pl.pause(1)
+#    else:
+#        print 'skipped'
+#
+##pl.colorbar()
+##%%
+#
+##%%
+#masks_ben=ut.nf_read_roi_zip('neurofinder01.01_combined.zip',dims)
+#regions2=cse.utilities.nf_masks_to_json( masks_ben,'masks_ben.json')
+#pl.imshow(np.sum(masks_ben>0,0)>0)
+#pl.pause(3)
+#pl.imshow(5*np.sum(masks,0),alpha=.3)
+#
+##%%
+## load the images
+#masks=cse.utilities.nf_load_masks('regions/regions.json',np.shape(m)[1:])
+## show the outputs
+#plt.figure()
+#plt.subplot(1, 2, 1)
+#plt.imshow(m.sum(axis=0), cmap='gray')
+#plt.subplot(1, 2, 2)
+#plt.imshow(masks.sum(axis=0), cmap='gray')
+#plt.show()
+##%%
+#fname='regions_2.json'
+#regions2=cse.utilities.nf_masks_to_json(np.roll( masks,20,axis=1) ,fname)
+##regions2=cse.utilities.nf_masks_to_json(masks,fname)
+##%%  
