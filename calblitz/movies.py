@@ -566,9 +566,6 @@ class movie(ts.timeseries):
         mask=np.reshape(A.T,(d1,d2,pca_comp))
         return mask
 
-    def compute_StructuredNMFactorization(self):
-        print "to do"
-        
    
     def local_correlations(self,eight_neighbours=False):
          '''
