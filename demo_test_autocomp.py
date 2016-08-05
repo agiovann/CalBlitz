@@ -34,13 +34,13 @@ import h5py
 import os
 fnames=[]
 for file in os.listdir("./"):
-    if file.startswith("k37_") and file.endswith(".tif"):
+    if file.startswith("dendr") and file.endswith(".tif"):
         fnames.append(file)
 fnames.sort()
 print fnames  
 #%%
 Yr=cb.load(fnames[0],fr=30)    
-Yr=Yr[:,80:130,360:410]
+#Yr=Yr[:,80:130,360:410]
 pl.imshow(np.mean(Yr,0),cmap=pl.cm.gray)
         
 #%%      
@@ -71,8 +71,8 @@ np.savez('Yr_DS_2.npz',d1=d1,d2=d2)on correct  here
 
 #%% SUE ANN PATCH
 
-Yr1_tot=cb.load('SueAnn.tif',fr=30)    
-Yr1=Yr1_tot[:,80:130,360:410]
+Yr1_tot=cb.load('dendritic_demo.tif',fr=30)    
+Yr1=Yr1_tot
 Yr2=Yr1.copy().bilateral_blur_2D(diameter=10,sigmaColor=10000,sigmaSpace=0)
 Yr2,shifts,_,_=Yr2.motion_correct(remove_blanks=True)
 Yr3=Yr1.copy().apply_shifts(shifts,remove_blanks=True)
@@ -80,13 +80,13 @@ Yr3.save('patch_sue.tif')
 pl.imshow(np.mean(Yr3,0),cmap=pl.cm.gray)
 #%% LOAD MOVIE AND MAKE DIMENSIONS COMPATIBLE WITH CNMF
 reload=0
-#filename='patch_sue.tif'
+filename='patch_sue.tif'
 #filename='patch.tif'
 #filename='patch_2.tif'
 #filename='PCsforPC.tif'
 #filename='demoMovie.tif'
 #filename='PCsforPC.tif'
-filename='demoMovie.tif'
+#filename='demoMovie.tif'
 #filename='selmanExample.tif'
 t = tifffile.TiffFile(filename) 
 Yr = t.asarray().astype(dtype=np.float32) 
@@ -126,7 +126,7 @@ m=cb.movie(scipy.ndimage.gaussian_filter(m, sigma=(1,1,1), mode='nearest',trunca
 
 # resize movie
 m=m.resize(1,1,.2)
-(m-np.mean(m)).play(gain=10.,magnification=4,backend='opencv',fr=20)
+(m-np.mean(m)).play(gain=5.,magnification=4,backend='opencv',fr=20)
 #%% ONLINE NMF USING CALBLITZ
 #perc=8
 #myfloat=np.float32
@@ -145,11 +145,14 @@ use_pixels_as_basis=True
 
 # alpha is the L1 Norm regulatizer
 #sue ann
+#remove_baseline=True
+#alpha= 10e2
+#n_components=30
+
+#demo dendritic
 remove_baseline=True
 alpha= 10e2
 n_components=30
-
-
 
 # patch_1.tif  
 #alpha= 20e2
@@ -159,10 +162,10 @@ n_components=30
 
 # demoMovie.tif
 
-alpha= 50e2
-n_components=30
-perc=50
-remove_baseline=False
+#alpha= 50e2
+#n_components=30
+#perc=50
+#remove_baseline=False
 # PC
 #alpha= 5e2
 #n_components=50
@@ -203,11 +206,18 @@ else:
     
 
 
-
+#%%
 pl.figure()
-for idx,mm in enumerate(X.T):
+for idx,mm in enumerate(X1.T):
     pl.subplot(5,6,idx+1)
     pl.imshow(np.reshape(mm,(d1,d2),order='F'),cmap=pl.cm.gray,vmin=np.percentile(mm,1),vmax=np.percentile(mm,98))
+    
+#%%
+pl.figure()
+for idx,mmmm in enumerate(mmm):
+    pl.subplot(5,6,idx+1)
+    pl.imshow(mmmm,vmax=np.percentile(mm,98),cmap=pl.cm.gray)
+    
 #%%
 np.savez('res_auto_comp.npz',X=X,C=C,d1=d1,d2=d2,mdl=mdl)    
 #%% NOW RELOAD ORIGINAL MOVIE AND APPLY NMF INITIALIZING WITH VALUES COMPUTED ON DOWNSAMPLED VERSION
