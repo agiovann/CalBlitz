@@ -30,6 +30,7 @@ import cv2
 import scipy
 from sklearn.decomposition import MiniBatchDictionaryLearning,PCA,NMF,IncrementalPCA
 import h5py
+from glob import glob
 #%% CREATE PATCH OF DATA
 import os
 fnames=[]
@@ -80,7 +81,9 @@ Yr3.save('patch_sue.tif')
 pl.imshow(np.mean(Yr3,0),cmap=pl.cm.gray)
 #%% LOAD MOVIE AND MAKE DIMENSIONS COMPATIBLE WITH CNMF
 reload=0
-filename='patch_sue.tif'
+filename='resized_pf.tif'
+
+#filename='patch_sue.tif'
 #filename='patch.tif'
 #filename='patch_2.tif'
 #filename='PCsforPC.tif'
@@ -122,11 +125,13 @@ m=cb.movie(np.transpose(np.array(Y[:,:,N:N1]),[2,0,1]),fr=30)
 #m=cb.movie(scipy.ndimage.percentile_filter(m, 90, size=(3,2,2), mode='nearest'),fr=30)
 
 #denoise using gaussian filter: USE THIS!!!
-m=cb.movie(scipy.ndimage.gaussian_filter(m, sigma=(1,1,1), mode='nearest',truncate=2),fr=30)
+m=cb.movie(scipy.ndimage.gaussian_filter(m, sigma=(.5,.5,.5), mode='nearest',truncate=2),fr=30)
 
 # resize movie
 m=m.resize(1,1,.2)
-(m-np.mean(m)).play(gain=5.,magnification=4,backend='opencv',fr=20)
+(m-np.mean(m)).play(gain=5.,magnification=2,fr=100)
+#%%
+m=m[:,10:60,27:495]
 #%% ONLINE NMF USING CALBLITZ
 #perc=8
 #myfloat=np.float32
@@ -152,7 +157,8 @@ use_pixels_as_basis=True
 #demo dendritic
 remove_baseline=True
 alpha= 10e2
-n_components=30
+n_components=10
+perc=20
 
 # patch_1.tif  
 #alpha= 20e2
@@ -208,16 +214,25 @@ else:
 
 #%%
 pl.figure()
-for idx,mm in enumerate(X1.T):
-    pl.subplot(5,6,idx+1)
+for idx,mm in enumerate(X.T):
+    pl.subplot(10,1,idx+1)
     pl.imshow(np.reshape(mm,(d1,d2),order='F'),cmap=pl.cm.gray,vmin=np.percentile(mm,1),vmax=np.percentile(mm,98))
-    
+    pl.axis('off')    
 #%%
+bckr=[0,4]
+pfs=[1,2,3,5,6,8]
 pl.figure()
-for idx,mmmm in enumerate(mmm):
-    pl.subplot(5,6,idx+1)
-    pl.imshow(mmmm,vmax=np.percentile(mm,98),cmap=pl.cm.gray)
-    
+pl.subplot(2,1,1)    
+pl.plot(C[:,bckr]+np.arange(0,80,40)[None,:])
+pl.ylabel('a.u.')
+pl.legend(list(bckr))
+pl.axis('tight')
+pl.subplot(2,1,2)
+pl.plot(C[:,pfs]+np.arange(0,120,20)[None,:])
+pl.xlabel('frames')
+pl.ylabel('a.u.')
+pl.axis('tight')
+pl.legend(list([1,2,3,5,6,8]))
 #%%
 np.savez('res_auto_comp.npz',X=X,C=C,d1=d1,d2=d2,mdl=mdl)    
 #%% NOW RELOAD ORIGINAL MOVIE AND APPLY NMF INITIALIZING WITH VALUES COMPUTED ON DOWNSAMPLED VERSION
