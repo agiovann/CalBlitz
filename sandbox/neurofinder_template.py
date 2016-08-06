@@ -41,6 +41,7 @@ from ipyparallel import Client
 
 #%%
 folders_in=[
+'/mnt/ceph/users/agiovann/ImagingData/LABELLING/NEUROFINDER/neurofinder.00.00.test/',
 '/mnt/ceph/users/agiovann/ImagingData/LABELLING/NEUROFINDER/neurofinder.00.01.test/',
 '/mnt/ceph/users/agiovann/ImagingData/LABELLING/NEUROFINDER/neurofinder.01.00.test/',
 '/mnt/ceph/users/agiovann/ImagingData/LABELLING/NEUROFINDER/neurofinder.01.01.test/',
@@ -48,52 +49,64 @@ folders_in=[
 '/mnt/ceph/users/agiovann/ImagingData/LABELLING/NEUROFINDER/neurofinder.02.01.test/',
 '/mnt/ceph/users/agiovann/ImagingData/LABELLING/NEUROFINDER/neurofinder.03.00.test/',
 '/mnt/ceph/users/agiovann/ImagingData/LABELLING/NEUROFINDER/neurofinder.04.00.test/',
-'/mnt/ceph/users/agiovann/ImagingData/LABELLING/NEUROFINDER/neurofinder.04.01.test/']
-for folder_in in folders_in:
+'/mnt/ceph/users/agiovann/ImagingData/LABELLING/NEUROFINDER/neurofinder.04.01.test/',
+#%
+#folders_in=[
+'/mnt/ceph/users/agiovann/ImagingData/LABELLING/NEUROFINDER/neurofinder.00.07/',
+'/mnt/ceph/users/agiovann/ImagingData/LABELLING/NEUROFINDER/neurofinder.00.00/',
+'/mnt/ceph/users/agiovann/ImagingData/LABELLING/NEUROFINDER/neurofinder.01.00/',
+'/mnt/ceph/users/agiovann/ImagingData/LABELLING/NEUROFINDER/neurofinder.01.01/',
+'/mnt/ceph/users/agiovann/ImagingData/LABELLING/NEUROFINDER/neurofinder.02.00/',
+'/mnt/ceph/users/agiovann/ImagingData/LABELLING/NEUROFINDER/neurofinder.02.01/',
+'/mnt/ceph/users/agiovann/ImagingData/LABELLING/NEUROFINDER/neurofinder.03.00/',
+'/mnt/ceph/users/agiovann/ImagingData/LABELLING/NEUROFINDER/neurofinder.04.00/',
+'/mnt/ceph/users/agiovann/ImagingData/LABELLING/NEUROFINDER/neurofinder.04.01/']
+
+#%%
+backend = 'local'
+if backend == 'SLURM':
+    n_processes = np.int(os.environ.get('SLURM_NPROCS'))
+else:
+    n_processes = np.maximum(np.int(psutil.cpu_count()),1) # roughly number of cores on your machine minus 1
+print 'using ' + str(n_processes) + ' processes'
+single_thread=False
+
+if single_thread:
+    dview=None
+else:    
     try:
-        #'/mnt/ceph/users/agiovann/ImagingData/LABELLING/NEUROFINDER/neurofinder.00.00.test/']
+        c.close()
+    except:
+        print 'C was not existing, creating one'
+    print "Stopping  cluster to avoid unnencessary use of memory...."
+    sys.stdout.flush()  
+    if backend == 'SLURM':
+        try:
+            cse.utilities.stop_server(is_slurm=True)
+        except:
+            print 'Nothing to stop'
+        slurm_script='/mnt/xfs1/home/agiovann/SOFTWARE/Constrained_NMF/SLURM/slurmStart.sh'
+        cse.utilities.start_server(slurm_script=slurm_script)
+        pdir, profile = os.environ['IPPPDIR'], os.environ['IPPPROFILE']
+        c = Client(ipython_dir=pdir, profile=profile)        
+    else:
+        cse.utilities.stop_server()
+        cse.utilities.start_server()        
+        c=Client()
+
+    print 'Using '+ str(len(c)) + ' processes'
+    dview=c[:len(c)]
+#%%
+for folder_in in folders_in:
+#    try:
+        #%%'/mnt/ceph/users/agiovann/ImagingData/LABELLING/NEUROFINDER/neurofinder.00.00.test/']
         fname_mov=os.path.join(os.path.split(folder_in)[0], os.path.split(folder_in)[-1] + 'MOV.tif')
         print fname_mov
         files=sorted(glob(os.path.join(os.path.split(folder_in)[0],'images/*.tiff')))
         #%% LOAD MOVIE HERE USE YOUR METHOD, Movie is frames x dim2 x dim2
         m=cb.load_movie_chain(files,fr=30)
         m=m-np.min(m)
-        m.save(fname_mov)
-        
-        #%%
-        backend = 'local'
-        if backend == 'SLURM':
-            n_processes = np.int(os.environ.get('SLURM_NPROCS'))
-        else:
-            n_processes = np.maximum(np.int(psutil.cpu_count()),1) # roughly number of cores on your machine minus 1
-        print 'using ' + str(n_processes) + ' processes'
-        single_thread=False
-        
-        if single_thread:
-            dview=None
-        else:    
-            try:
-                c.close()
-            except:
-                print 'C was not existing, creating one'
-            print "Stopping  cluster to avoid unnencessary use of memory...."
-            sys.stdout.flush()  
-            if backend == 'SLURM':
-                try:
-                    cse.utilities.stop_server(is_slurm=True)
-                except:
-                    print 'Nothing to stop'
-                slurm_script='/mnt/xfs1/home/agiovann/SOFTWARE/Constrained_NMF/SLURM/slurmStart.sh'
-                cse.utilities.start_server(slurm_script=slurm_script)
-                pdir, profile = os.environ['IPPPDIR'], os.environ['IPPPROFILE']
-                c = Client(ipython_dir=pdir, profile=profile)        
-            else:
-                cse.utilities.stop_server()
-                cse.utilities.start_server()        
-                c=Client()
-        
-            print 'Using '+ str(len(c)) + ' processes'
-            dview=c[:len(c)]
+        m.save(fname_mov)        
             
         #%%
         downsample_factor = .3  
@@ -176,7 +189,7 @@ for folder_in in folders_in:
         #%% Order components
         #A_or, C_or, srt = cse.utilities.order_components(A2,C2)
         #%% stop server and remove log files
-        cse.utilities.stop_server(is_slurm = (backend == 'SLURM')) 
+#        cse.utilities.stop_server(is_slurm = (backend == 'SLURM')) 
         log_files=glob('Yr*_LOG_*')
         for log_file in log_files:
             os.remove(log_file)
@@ -229,56 +242,174 @@ for folder_in in folders_in:
         #    dims=(d1,d2)
         #
         #
-        ##%% extract binary masks
-        min_radius=4
+        #%% extract binary masks
+        min_radius=gSig[0]
         masks_ws,pos_examples,neg_examples=cse.utilities.extract_binary_masks_blob(
         A2.tocsc()[:,:], min_radius, dims, num_std_threshold=1, 
         minCircularity= 0.5, minInertiaRatio = 0.2,minConvexity = .8)
         np.savez(os.path.join(os.path.split(fname_new)[0],'regions_CNMF.npz'),masks_ws=masks_ws,pos_examples=pos_examples,neg_examples=neg_examples)
-        ##%%
-        #pl.subplot(1,2,1)
+#        #%%
+#        pl.subplot(1,2,1)
         final_masks=np.array(masks_ws)[pos_examples]
-        #pl.imshow(np.reshape(final_masks.max(0),dims,order='F'),vmax=1)
-        #pl.title('Positive examples')
-        #pl.subplot(1,2,2)
-        #neg_examples_masks=np.array(masks_ws)[neg_examples]
-        #pl.imshow(np.reshape(neg_examples_masks.max(0),dims,order='F'),vmax=1)
-        #pl.title('Negative examples')
-        ##%%
-        #crd = cse.utilities.plot_contours(A2.tocsc()[:,pos_examples],Cn,thr=0.9)
-        ##%%
-        #masks_ben=cse.utilities.nf_read_roi_zip('neurofinder01.01_combined.zip',dims)
-        #masks_nf=cse.utilities.nf_load_masks('regions/regions.json',dims)
-        #
-        ##%
-        ## load the images
-        ## show the outputs
-        #plt.figure()
-        #plt.subplot(2, 2, 1)
-        #plt.imshow(final_masks.sum(axis=0), cmap='hot')
-        #pl.imshow(Cn,cmap='gray',alpha=.8)
-        #pl.title('CNMF')
-        #plt.subplot(2, 2, 2)
-        #plt.imshow(masks_nf.sum(axis=0), cmap='hot')
-        #pl.imshow(Cn,cmap='gray',alpha=.8)
-        #pl.title('NEUROFINDER')
-        #plt.subplot(2, 2, 3)
-        #plt.imshow(masks_ben.sum(0), cmap='hot')
-        #pl.imshow(Cn,cmap='gray',alpha=.8)
-        #pl.title('BEN')
-        #plt.subplot(2, 2, 4)
-        #pl.imshow(np.reshape(A2.tocsc()[:,:].sum(1),dims,order='F'),cmap='hot')
-        #plt.imshow(Cn, alpha=.5,cmap='gray')
-        #pl.title('A MATRIX')
+#        pl.imshow(np.reshape(final_masks.max(0),dims,order='F'),vmax=1)
+#        pl.imshow(Cn,cmap='gray',alpha=.8)
+#
+#        pl.title('Positive examples')
+#        pl.subplot(1,2,2)
+#        neg_examples_masks=np.array(masks_ws)[neg_examples]
+#        pl.imshow(np.reshape(neg_examples_masks.max(0),dims,order='F'),vmax=1)
+#        pl.imshow(Cn,cmap='gray',alpha=.8)
+#
+#        pl.title('Negative examples')
+#        #%%https://maps.app.goo.gl/?link=https://www.google.com/maps/dir/455%2BCentral%2BPark%2BWest,%2BNew%2BYork,%2BNY%2B10025/Cold%2BSpring%2BHarbor%2BLaboratory,%2B1%2BBungtown%2BRd,%2BCold%2BSpring%2BHarbor,%2BNY%2B11724/@40.771316,-73.9473862,13.25z/data%3D!4m22!4m21!1m10!1m1!1s0x89c2f6226bcc4c09:0xcc199e37cb0de515!2m2!1d-73.9607631!2d40.7978727!3m4!1m2!1d-73.918729!2d40.7710912!3s0x89c25f4405e9bd41:0x3e372f0635525ecf!1m5!1m1!1s0x89c2827650935065:0xfcd58807ef419c9a!2m2!1d-73.466515!2d40.8573802!2m2!7e2!8j1470294000!3e0?utm_source%3Dapp-invite%26mt%3D8%26pt%3D9008%26utm_medium%3DSIMPLE%26utm_campaign%3Ds2e-ai%26ct%3Ds2e-ai&apn=com.google.android.apps.maps&amv=703000000&isi=585027354&ibi=com.google.Maps&ius=comgooglemapsurl&utm_source=app-invite&mt=8&pt=9008&utm_medium=SIMPLE&utm_campaign=s2e-ai&ct=s2e-ai&invitation_id=493454522602-37bb3754-1158-412b-ae82-01dcc4b1e7c2
+#        ##%%
+#        #crd = cse.utilities.plot_contours(A2.tocsc()[:,pos_examples],Cn,thr=0.9)
+#        ##%%
+#        #masks_ben=cse.utilities.nf_read_roi_zip('neurofinder01.01_combined.zip',dims)
+#        #masks_nf=cse.utilities.nf_load_masks('regions/regions.json',dims)
+#        #
+#        #%
+#        # load the images
+#        # show the outputs
+#        plt.figure()
+#        plt.subplot(2, 2, 1)
+#        plt.imshow(final_masks.sum(axis=0), cmap='hot')
+#        pl.imshow(Cn,cmap='gray',alpha=.8)
+#        pl.title('CNMF')
+#        plt.subplot(2, 2, 2)
+#        plt.imshow(masks_nf.sum(axis=0), cmap='hot')
+#        pl.imshow(Cn,cmap='gray',alpha=.8)
+#        pl.title('NEUROFINDER')
+#        plt.subplot(2, 2, 3)
+#        plt.imshow(masks_ben.sum(0), cmap='hot')
+#        pl.imshow(Cn,cmap='gray',alpha=.8)
+#        pl.title('BEN')
+#        plt.subplot(2, 2, 4)
+#        pl.imshow(np.reshape(A2.tocsc()[:,:].sum(1),dims,order='F'),cmap='hot')
+#        plt.imshow(Cn, alpha=.5,cmap='gray')
+#        pl.title('A MATRIX')
         #plt.show()
-        ##%%
+        #%%
         regions_CNMF=cse.utilities.nf_masks_to_json( final_masks,os.path.join(os.path.split(fname_new)[0],'regions_CNMF.json'))
         
-    except:
-        np.save(os.path.join(os.path.split(folder_in)[0],'failure'),np.array(1))
+#    except:
+#        np.save(os.path.join(os.path.split(folder_in)[0],'failure'),np.array(1))
 #regions_BEN=cse.utilities.nf_masks_to_json( masks_ben,'regions_ben.json')
-##%%
-#from neurofinder import match,load,centers,shapes
+#%%
+from neurofinder import load, centers, shapes
+for folder_in_check in folders_in[-9:]:
+    
+    print folder_in_check
+    a=load(os.path.join(folder_in_check,'regions_CNMF.json'))
+    b=load(os.path.join(folder_in_check,'regions/regions.json'))
+    #print match(a,b,threshold=5)
+    re,pr=centers(a,b,threshold=5)
+    incl,excl=shapes(a,b,threshold=5)
+    fscore=2*(pr*re)/(pr+re)
+    print 'Exclusion %.3f\nRecall %.3f\nCombined %.3f\nPrecision %.3f\nInclusion %.3f\n' % (excl,re,fscore,pr,incl)
+#%%
+from neurofinder import load, centers, shapes
+results=[]
+for folder_in_check in folders_in[:-9]:
+    
+    a=load(os.path.join(folder_in_check,'regions_CNMF.json'))  
+    dset='.'.join(folder_in_check[:-1].split('.')[1:])
+    print (dset)
+    with np.load(os.path.join(folder_in_check,'regions_CNMF.npz')) as ld:
+        masks_ws=ld['masks_ws']
+        pos_examples=ld['pos_examples']
+        neg_examples=ld['neg_examples']    
+        regions_CNMF=cse.utilities.nf_masks_to_json( masks_ws[pos_examples],os.path.join(folder_in_check,'tmp.json'))
+    dd=dict()
+    dd['dataset']= dset   
+    dd['regions']= regions_CNMF
+    results.append(dd) 
+#%%
+import json
+with open('results.json', 'w') as f:
+  f.write(json.dumps(results))
+#%% Inspect results
+import cv2    
+import numpy as np
+
+for folder_in_check in folders_in:
+
+    print folder_in_check
+
+    with np.load(os.path.join(folder_in_check,'regions_CNMF.npz')) as ld:
+        masks_ws=ld['masks_ws']
+        pos_examples=ld['pos_examples']
+        neg_examples=ld['neg_examples']    
+    
+    
+    sizes=np.sum(masks_ws,axis=(1,2))
+    pl.imshow(np.sum(masks_ws[sizes>(np.pi*(5**2))],0))
+    M=[]
+    for thresh in masks_ws:
+        im2,contours,hierarchy = cv2.findContours(thresh.astype(np.uint8), 1, 2)
+        cnt = contours[0]
+        cnt = contours[0]
+        mm=cv2.moments(cnt)
+        M.append(np.atleast_2d(np.array(mm.values())))
+     M1=np.concatenate(M,0)
+     
+#     for features in range(24):
+#         pl.hist(M1[pos_examples,features],100,normed=True)   
+#         pl.hist(M1[neg_examples,features],100,normed=True)  
+#         pl.pause(1)
+#         pl.cla()
+    from sklearn import svm
+    clf = svm.SVC()
+    X=M1[np.hstack([pos_examples[:70],neg_examples[:70]])]
+    
+    y=np.hstack([np.zeros_like(pos_examples[:70]),np.ones_like(neg_examples[:70])])
+    clf.fit(X, y)
+    lbs=clf.predict(M1)
+    pl.imshow(np.max(masks_ws[lbs==1],0))
+    pl.imshow(np.max(masks_ws[pos_examples],0)*10,alpha=.5)
+
+#    with np.load(os.path.join(folder_in_check,'results_analysis.npz'))  as ld:
+#        Cn=ld['Cn']
+#        dims=(ld['d1'],ld['d2'])
+    
+#    pl.subplot(1,2,1)
+#    final_masks=np.array(masks_ws)[pos_examples]
+#    pl.imshow(np.reshape(final_masks.max(0),dims,order='F'),vmax=1)
+#    pl.imshow(Cn,cmap='gray',alpha=.8)
+#    
+#    pl.title('Positive examples')
+#    pl.subplot(1,2,2)
+#    neg_examples_masks=np.array(masks_ws)[neg_examples]
+#    pl.imshow(np.reshape(neg_examples_masks.max(0),dims,order='F'),vmax=1)
+#    pl.imshow(Cn,cmap='gray',alpha=.8)
+#    
+#    pl.title('Negative examples') 
+#    pl.savefig(os.path.split(folder_in_check)[0] + '_result.pdf')
+#    pl.pause(.1)
+#    pl.close()
+#    print os.path.join(folder_in_check,'regions_CNMF.json')
+    regions_CNMF=cse.utilities.nf_masks_to_json( final_masks,os.path.join(folder_in_check,'regions_CNMF.json'))
+    a=load(os.path.join(folder_in_check,'regions_CNMF.json'))
+    b=load(os.path.join(folder_in_check,'regions/regions.json'))
+    #print match(a,b,threshold=5)
+    re,pr=centers(a,b,threshold=5)
+    incl,excl=shapes(a,b,threshold=5)
+    fscore=2*(pr*re)/(pr+re)
+    print 'Exclusion %.3f\nRecall %.3f\nCombined %.3f\nPrecision %.3f\nInclusion %.3f\n' % (excl,re,fscore,pr,incl)
+#%%   
+for folder_in_check in folders_in[-2:-1]:
+
+    print folder_in_check
+
+    with np.load(os.path.join(folder_in_check,'results_analysis.npz')) as ld:  
+        locals().update(ld)
+   
+    min_radius=gSig[0]
+    masks_ws,pos_examples,neg_examples=cse.utilities.extract_binary_masks_blob(
+    scipy.sparse.coo_matrix(A2), min_radius, (d1,d2), num_std_threshold=1, 
+    minCircularity= 0.5, minInertiaRatio = 0.2,minConvexity = .8)
+    np.savez(os.path.join(folder_in_check,'regions_CNMF.npz'),masks_ws=masks_ws,pos_examples=pos_examples,neg_examples=neg_examples)     
+#from neurofinder import match,load,centers,shapes 
 #a=load('regions/regions.json')
 #b=load('regions_ben.json')
 ##print match(a,b,threshold=5)

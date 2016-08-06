@@ -37,22 +37,22 @@ from ipyparallel import Client
 import calblitz as cb
 from calblitz.granule_cells import utils_granule as gc
 #%%
-base_folder='/mnt/ceph/users/agiovann/ImagingData/eyeblink/b35/20160714143248/'
+base_folder='/mnt/ceph/users/agiovann/ImagingData/eyeblink/b38/20160726150632/'
 img_descr=cb.utils.get_image_description_SI(glob(base_folder+'2016*.tif')[0])[0]
 f_rate=img_descr['scanimage.SI.hRoiManager.scanFrameRate']
 print f_rate    
 #%%
-fls=glob('2016*.tif')     
+fls=glob(os.path.join(base_folder,'2016*.tif'))
 fls.sort()     
 print fls 
 # verufy they are ordered 
 #%%
 triggers_img,trigger_names_img=gc.extract_triggers(fls,read_dictionaries=False)     
-np.savez('all_triggers.npz',triggers=triggers_img,trigger_names=trigger_names_img)   
+np.savez(base_folder+'all_triggers.npz',triggers=triggers_img,trigger_names=trigger_names_img)   
 #%% get information from eyelid traces
 t_start=time()     
-camera_file=glob('*_cam2.h5')
-assert len(camera_file)==1, 'there are two camera files'    
+camera_file=glob(os.path.join(base_folder,'*_cam2.h5'))
+assert len(camera_file)==1, 'there are none or two camera files'    
 res_bt=gc.get_behavior_traces(camera_file[0],t0=0,t1=8.0,freq=60,ISI=.25,draw_rois=False,plot_traces=False,mov_filt_1d=True,window_lp=5)   
 t_end=time()-t_start
 print t_end
@@ -103,86 +103,90 @@ pl.hist(amplitudes_at_US[idxNOCR],bins=bins)
 
 #%%
 pl.close() 
-f_results= glob('*.results_analysis.npz')
+f_results= glob(base_folder+'*results_analysis.npz')
 f_results.sort()
 for rs in f_results:
     print rs
 #%% load results and put them in lists
 A_s,C_s,YrA_s, Cn_s, b_s, f_s, shape =  gc.load_results(f_results)     
-B_s, lab_imgs, cm_s  = gc. threshold_components(A_s,shape, min_size=5,max_size=50,max_perc=.5)
-#%%
-for i,A_ in enumerate(B_s):
-     sizes=np.array(A_.sum(0)).squeeze()
-     pl.subplot(2,3,i+1)
-     pl.imshow(np.reshape(A_.sum(1),shape,order='F'),cmap='gray',vmax=.5)
-#%% compute mask distances 
-max_dist=30
-D_s=gc.distance_masks(B_s,cm_s,max_dist)       
-np.savez(base_folder+'distance_masks.npz',D_s=D_s)
-#%%
+if is_pf:
+    B_s = A_s 
+    neurons=range(B_s[0].shape[1])
+else:    
+    B_s, lab_imgs, cm_s  = gc.threshold_components(A_s,shape, min_size=5,max_size=50,max_perc=.5)
+    #%%
+    for i,A_ in enumerate(B_s):
+         sizes=np.array(A_.sum(0)).squeeze()
+         pl.subplot(2,3,i+1)
+         pl.imshow(np.reshape(A_.sum(1),shape,order='F'),cmap='gray',vmax=.5)
+    #%% compute mask distances 
+    max_dist=30
+    D_s=gc.distance_masks(B_s,cm_s,max_dist)       
+    np.savez(base_folder+'distance_masks.npz',D_s=D_s)
+    #%%
 
-#%%
-for ii,D in enumerate(D_s):
-    pl.subplot(3,3,ii+1)
-    pl.imshow(D,interpolation='None')
-#%% find matches
-matches,costs =  gc.find_matches(D_s, print_assignment=False)
-#%%
-neurons=gc.link_neurons(matches,costs,max_cost=0.6,min_FOV_present=None)
-#%%
-np.savez(base_folder+'neurons_matching.npz',matches=matches,costs=costs,neurons=neurons,D_s=D_s)
-#%%
-if 0:
-    import calblitz as cb
-    from calblitz.granule_cells import utils_granule as gc
-    from glob import glob
-    import numpy as np
-    import os
-    import scipy 
-    import pylab as pl
-    import ca_source_extraction as cse
-       
-    with np.load(base_folder+'distance_masks.npz') as ld:
-        D_s=ld['D_s']
-    with np.load(base_folder+'all_triggers.npz') as at:
-        triggers_img=at['triggers']
-        trigger_names_img=at['trigger_names'] 
-    with np.load(base_folder+'neurons_matching.npz') as ld:
-         locals().update(ld)
-    f_results= glob(base_folder+'*.results_analysis.npz')
-    f_results.sort()
-    for rs in f_results:
-        print rs     
-    print '*****'        
-    A_s,C_s,YrA_s, Cn_s, b_s, f_s, shape =  gc.load_results(f_results)     
-    B_s, lab_imgs, cm_s  = gc. threshold_components(A_s,shape, min_size=5,max_size=50,max_perc=.5)
-#%%            
-for idx,B in enumerate(A_s):
-     pl.subplot(2,3,idx+1)
-     pl.imshow(np.reshape(B[:,neurons[idx]].sum(1),shape,order='F'))
-#%%
-num_neurons=neurons[0].size
-for neuro in range(num_neurons):
+    #%%
+    for ii,D in enumerate(D_s):
+        pl.subplot(3,3,ii+1)
+        pl.imshow(D,interpolation='None')
+    #%% find matches
+    matches,costs =  gc.find_matches(D_s, print_assignment=False)
+    #%%
+    neurons=gc.link_neurons(matches,costs,max_cost=0.6,min_FOV_present=None)
+    #%%
+    np.savez(base_folder+'neurons_matching.npz',matches=matches,costs=costs,neurons=neurons,D_s=D_s)
+    #%%
+    if 0:
+        import calblitz as cb
+        from calblitz.granule_cells import utils_granule as gc
+        from glob import glob
+        import numpy as np
+        import os
+        import scipy 
+        import pylab as pl
+        import ca_source_extraction as cse
+           
+        with np.load(base_folder+'distance_masks.npz') as ld:
+            D_s=ld['D_s']
+        with np.load(base_folder+'all_triggers.npz') as at:
+            triggers_img=at['triggers']
+            trigger_names_img=at['trigger_names'] 
+        with np.load(base_folder+'neurons_matching.npz') as ld:
+             locals().update(ld)
+        f_results= glob(base_folder+'*.results_analysis.npz')
+        f_results.sort()
+        for rs in f_results:
+            print rs     
+        print '*****'        
+        A_s,C_s,YrA_s, Cn_s, b_s, f_s, shape =  gc.load_results(f_results)     
+        B_s, lab_imgs, cm_s  = gc. threshold_components(A_s,shape, min_size=5,max_size=50,max_perc=.5)
+    #%%            
     for idx,B in enumerate(A_s):
          pl.subplot(2,3,idx+1)
-         pl.imshow(np.reshape(B[:,neurons[idx][neuro]].sum(1),shape,order='F'))
-    pl.pause(.01)     
-    for idx,B in enumerate(A_s):
-        pl.subplot(2,3,idx+1)
-        pl.cla()       
-
-#%%
-if 0:
-    idx=0
-    for  row, column in zip(matches[idx][0],matches[idx][1]):
-        value = D_s[idx][row,column]
-        if value < .5:
-            pl.cla() 
-            pl.imshow(np.reshape(B_s[idx][:,row].todense(),(512,512),order='F'),cmap='gray',interpolation='None')    
-            pl.imshow(np.reshape(B_s[idx+1][:,column].todense(),(512,512),order='F'),alpha=.5,cmap='hot',interpolation='None')               
-            if B_s[idx][:,row].T.dot(B_s[idx+1][:,column]).todense() == 0:
-                print 'Flaw'            
-            pl.pause(.3)
+         pl.imshow(np.reshape(B[:,neurons[idx]].sum(1),shape,order='F'))
+    #%%
+    num_neurons=neurons[0].size
+    for neuro in range(num_neurons):
+        for idx,B in enumerate(A_s):
+             pl.subplot(2,3,idx+1)
+             pl.imshow(np.reshape(B[:,neurons[idx][neuro]].sum(1),shape,order='F'))
+        pl.pause(.01)     
+        for idx,B in enumerate(A_s):
+            pl.subplot(2,3,idx+1)
+            pl.cla()       
+    
+    #%%
+    if 0:
+        idx=0
+        for  row, column in zip(matches[idx][0],matches[idx][1]):
+            value = D_s[idx][row,column]
+            if value < .5:
+                pl.cla() 
+                pl.imshow(np.reshape(B_s[idx][:,row].todense(),(512,512),order='F'),cmap='gray',interpolation='None')    
+                pl.imshow(np.reshape(B_s[idx+1][:,column].todense(),(512,512),order='F'),alpha=.5,cmap='hot',interpolation='None')               
+                if B_s[idx][:,row].T.dot(B_s[idx+1][:,column]).todense() == 0:
+                    print 'Flaw'            
+                pl.pause(.3)
 
 #%%
 tmpl_name=glob('*template_total.npz')[0]
@@ -264,6 +268,8 @@ crs=idxCR
 nocrs=idxNOCR
 uss=idxUS
 
+triggers_img=np.array(triggers_img)
+
 idx_trig_CS=triggers_img[:][:,0]
 idx_trig_US=triggers_img[:][:,1]
 trial_type=triggers_img[:][:,2]
@@ -291,8 +297,8 @@ for idx,fr in enumerate(chunk_sizes):
         if trial_type[idx] == CS_ALONE:
                 Ftraces_mat[idx]=Ftraces[idx][:,np.int(idx_trig_CS[idx]+ISI-samples_before):np.int(idx_trig_CS[idx]+ISI+samples_after)]
         else:
-                Ftraces_mat[idx]=Ftraces[idx][:,np.int(idx_trig_US[idx]-samples_before):np.int(idx_trig_US[idx]+samples_after)]#%%
-np.savez('ftraces.npz',ftraces=ftraces,samples_before=samples_before,samples_after=samples_after,ISI=ISI)
+                Ftraces_mat[idx]=Ftraces[idx][:,np.int(idx_trig_US[idx]-samples_before):np.int(idx_trig_US[idx]+samples_after)]
+
 #%%
 wheel_traces, movement_at_CS, trigs_mov = gc.process_wheel_traces(np.array(res_bt['wheel']),tm,thresh_MOV_iqr=1000,time_CS_on=-.25,time_US_on=0)    
 print trigs_mov
@@ -307,8 +313,7 @@ nm_idxNOCR = np.intersect1d(idxNOCR,trigs_mov['idxNO_MOV'])
 nm_idxCR = np.intersect1d(idxCR,trigs_mov['idxNO_MOV'])
 nm_idxUS = np.intersect1d(idxUS,trigs_mov['idxNO_MOV'])
 nm_idxCSCSUS=np.intersect1d(idxCSCSUS,trigs_mov['idxNO_MOV'])
-
-
+#%%
 #%%
 threshold_responsiveness=0.1
 ftraces=Ftraces_mat.copy()       
@@ -319,6 +324,10 @@ fraction_responsive=len(np.where(cell_responsiveness>threshold_responsiveness)[0
 print fraction_responsive
 ftraces=ftraces[:,cell_responsiveness>threshold_responsiveness,:]
 amplitudes_responses=np.mean(ftraces[:,:,samples_before+ISI-1:samples_before+ISI+1],-1)
+#%%
+np.savez('ftraces.npz',ftraces=ftraces,samples_before=samples_before,samples_after=samples_after,ISI=ISI)
+
+
 #%%pl.close()
 t=np.arange(-samples_before,samples_after)/f_rate
 pl.plot(t,np.median(ftraces[nm_idxCR],axis=(0,1)),'-*')
