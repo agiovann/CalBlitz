@@ -134,7 +134,7 @@ conda install pip
 conda install scikit-learn (or pip install scikit-learn)
 conda install scikit-image
 pip install pims
-conda install opencv 
+conda install -c menpo opencv3=3.1.0
 pip install tifffile
 ```
 
@@ -150,24 +150,10 @@ conda install scikit-learn (or pip install scikit-learn)
 conda install scikit-image
 pip install pims
 pip install tifffile
-
-#IF YOU DO NOT NEED TO READ AVI FILES 
-conda install opencv
-
-#IF YOU NEED TO READ AVIs
-Install homebrew[http://brew.sh]
-
-brew doctor
-brew tap homebrew/science
-brew install opencv3 --with-contrib  --with-ffmpeg 
+conda install -c menpo opencv3=3.1.0
 
 ```
 
-alternative way to install opencv 
-
-```
-conda install numpy scipy scikit-learn matplotlib python=3
-conda install -c https://conda.binstar.org/menpo opencv3
 ```
 
 WINDOWS
@@ -182,9 +168,10 @@ conda install scikit-learn (or pip install scikit-learn)
 conda install scikit-image
 pip install pims
 pip install tifffile
+conda install -c menpo opencv3=3.1.0
 
 ```
-you need to manually install opencv (pain in the neck)
+if this does not work, you need to manually install opencv (pain in the neck)
 
 
 
