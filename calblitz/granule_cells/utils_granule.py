@@ -9,7 +9,7 @@ import cv2
 import h5py
 import numpy as np
 import pylab as pl
-import glob
+from glob import glob
 import ca_source_extraction as cse
 import calblitz as cb
 from scipy import signal
@@ -398,9 +398,8 @@ def get_behavior_traces(fname,t0,t1,freq,ISI,draw_rois=False,plot_traces=False,m
                     
                     wheel_=np.concatenate([np.atleast_1d(0),np.nanmean(np.diff(mov_w,axis=0)**2,axis=(1,2))])                   
 
-                    if np.abs(new_ts[-1]  - time_abs[-1])>.5:
-
-                       raise Exception('Time duration is significantly larger or smaller than reference time')
+                    if np.abs(new_ts[-1]  - time_abs[-1])>1:
+                        raise Exception('Time duration is significantly larger or smaller than reference time')
                       
                       
                     wheel_=np.squeeze(wheel_)
@@ -548,7 +547,7 @@ def load_results(f_results):
     return A_s,C_s,YrA_s, Cn_s, b_s, f_s, shape  
 
 #%% threshold and remove spurious components    
-def threshold_components(A_s,shape,min_size=5,max_size=np.inf,max_perc=.5):        
+def threshold_components(A_s,shape,min_size=5,max_size=np.inf,max_perc=.5,remove_unconnected_components=True):        
     """
     Threshold components output of a CNMF algorithm (A matrices)
     
@@ -567,7 +566,8 @@ def threshold_components(A_s,shape,min_size=5,max_size=np.inf,max_perc=.5):
     max_perc: float        
         fraction of the maximum of each component used to threshold 
         
-        
+    remove_unconnected_components: boolean
+        whether to remove components that are fragmented in space
     Returns:
     -------        
     
@@ -594,16 +594,19 @@ def threshold_components(A_s,shape,min_size=5,max_size=np.inf,max_perc=.5):
             label_im, nb_labels = ndimage.label(mask)
             sizes = ndimage.sum(mask, label_im, range(nb_labels + 1))
             
+            if remove_unconnected_components: 
+                l_largest=(label_im==np.argmax(sizes))
+                cm.append(scipy.ndimage.measurements.center_of_mass(l_largest,l_largest))
+                lim[l_largest] = (idx+1)
+        #       #remove connected components that are too small
+                mask_size=np.logical_or(sizes<min_size,sizes>max_size)
+                if np.sum(mask_size[1:])>1:
+                    print 'removing ' + str( np.sum(mask_size[1:])-1) + ' components'
+                remove_pixel=mask_size[label_im]
+                label_im[remove_pixel] = 0
             
-            l_largest=(label_im==np.argmax(sizes))
-            cm.append(scipy.ndimage.measurements.center_of_mass(l_largest,l_largest))
-            lim[l_largest] = (idx+1)
-    #       #remove connected components that are too small
-            mask_size=np.logical_or(sizes<min_size,sizes>max_size)
-            if np.sum(mask_size[1:])>1:
-                print 'removing ' + str( np.sum(mask_size[1:])-1) + ' components'
-            remove_pixel=mask_size[label_im]
-            label_im[remove_pixel] = 0           
+                
+                       
 
             label_im=(label_im>0)*1    
             
@@ -777,11 +780,13 @@ def generate_linked_traces(mov_names,chunk_sizes,A,b,f):
     
     Parameters:
     -----------
-    mov_names
+    mov_names: list of path to movies associated with the same A,b,and f
     
-    A
+    chunk_sizes:list containing the number of frames in each movie    
+    
+    A,b and f: from CNMF
 
-    neurons_map
+    
     
     
     Returns:
@@ -819,7 +824,7 @@ def generate_linked_traces(mov_names,chunk_sizes,A,b,f):
     for jj,mv in enumerate(mov_names):
 
         mov_chunk_name=os.path.splitext(os.path.split(mv)[-1])[0]+'.hdf5'        
-
+        mov_chunk_name=os.path.join(os.path.dirname(mv),mov_chunk_name)
         print mov_chunk_name
         
         m=cb.load(mov_chunk_name).to_2D().T      
@@ -842,4 +847,270 @@ def generate_linked_traces(mov_names,chunk_sizes,A,b,f):
         Y_r_bl=cse.utilities.mode_robust(Y_r_bl,1)        
         traces_DFF.append(Y_r_sig/Y_r_bl[:,np.newaxis])
 
-    return traces,traces_DFF,traces_BL    
+    return traces,traces_DFF,traces_BL
+#%%
+def extract_traces_mat(traces,triggers_idx,f_rate,time_before=2.7,time_after=5.3):
+    """
+    Equivalent of take for the input format we are using. 
+    
+    Parameters:
+    -----------
+    traces: list of ndarrays
+        each element is one trial, the dimensions are n_neurons x time
+    triggers_idx: list of ints
+        one for each element of traces, is the index of the trigger to align the traces to  
+    f_rate: double
+        frame rate associated to the traces
+    time_before,time_after: double
+        time before and after the trigger establishing the boundary of the extracted subtraces        
+            
+    Returns:
+    --------
+    traces_mat: matrix containing traces with dimensions trials X cell X time
+    
+    time_mat: associated time vector
+    """
+    samples_before = np.int(time_before*f_rate)
+    samples_after = np.int(time_after*f_rate)
+    
+    if traces[0].ndim > 1:   
+        traces_mat = np.zeros([len(traces),len(traces[0]),samples_after+samples_before])       
+    else:
+        traces_mat = np.zeros([len(traces),1,samples_after+samples_before]) 
+        
+    for idx,tr in enumerate(traces):  
+#            print samples_before,samples_after
+#            print np.int(triggers_idx[idx]-samples_before),np.int(triggers_idx[idx]+samples_after)
+            traces_mat[idx]=traces[idx][:,np.int(triggers_idx[idx]-samples_before):np.int(triggers_idx[idx]+samples_after)]
+        
+            
+
+    time_mat=np.arange(-samples_before,samples_after)/f_rate
+    
+    
+    
+    return traces_mat,time_mat
+#%%
+def load_data_from_stored_results(base_folder, load_masks=False, thresh_CR = 0.1,threshold_responsiveness=0.1,
+                                  is_blob=True,time_CR_on=-.1,time_US_on=.05,thresh_MOV_iqr=1000,time_CS_on_MOV=-.25,time_US_on_MOV=0):
+    """
+    From the partial data stored retrieves variables of interest 
+    
+    """
+    import calblitz as cb
+    import numpy as np
+    import scipy 
+    import pylab as pl
+    import pickle
+    from glob import glob
+   
+    
+    
+#    base_folder='/mnt/ceph/users/agiovann/ImagingData/eyeblink/b35/20160714143248/'
+    if is_blob:
+        with np.load(base_folder+'distance_masks.npz') as ld:
+            D_s=ld['D_s']
+            
+        with np.load(base_folder+'neurons_matching.npz') as ld:
+            neurons=ld['neurons']
+            locals().update(ld)
+                    
+    with np.load(base_folder+'all_triggers.npz') as at:
+        triggers_img=at['triggers']
+        trigger_names_img=at['trigger_names'] 
+    if load_masks:
+        f_results= glob(base_folder+'*results_analysis.npz')
+        f_results.sort()
+        for rs in f_results:
+            print rs     
+        print '*****'        
+        A_s,C_s,YrA_s, Cn_s, b_s, f_s, shape =  load_results(f_results) 
+        
+        if is_blob:
+            remove_unconnected_components=True
+        else:
+            remove_unconnected_components=False        
+            neurons=[]
+            for xx in A_s:
+                neurons.append(np.arange(A_s[0].shape[-1]))
+            
+    #    B_s, lab_imgs, cm_s  = threshold_components(A_s,shape, min_size=5,max_size=50,max_perc=.5,remove_unconnected_components=remove_unconnected_components)
+        
+        tmpl_name=glob(base_folder+'*template_total.npz')[0]
+    
+        with np.load(tmpl_name) as ld:
+            mov_names_each=ld['movie_names']
+            
+        A_each=[]
+        b_each=[]    
+        f_each=[]
+        for idx, mov_names in enumerate(mov_names_each):
+            idx=0
+            A_each.append(A_s[idx][:,neurons[idx]])
+        #    C=C_s[idx][neurons[idx]]
+        #    YrA=YrA_s[idx][neurons[idx]]
+            b_each.append(b_s[idx])
+            f_each.append(f_s[idx])
+    else:
+         A_each=[]
+         b_each=[]    
+         f_each=[]
+    
+    
+    with np.load(base_folder+'behavioral_traces.npz') as ld: 
+        res_bt = dict(**ld)
+        tm=res_bt['time']
+        f_rate_bh=1/np.median(np.diff(tm))
+        ISI=res_bt['trial_info'][0][3]-res_bt['trial_info'][0][2]
+        eye_traces=np.array(res_bt['eyelid'])
+        idx_CS_US=res_bt['idx_CS_US']
+        idx_US=res_bt['idx_US']
+        idx_CS=res_bt['idx_CS']
+        
+        idx_ALL=np.sort(np.hstack([idx_CS_US,idx_US,idx_CS]))
+        eye_traces,amplitudes_at_US, trig_CRs=process_eyelid_traces(eye_traces,tm,idx_CS_US,idx_US,idx_CS,thresh_CR=thresh_CR,time_CR_on=time_CR_on,time_US_on=time_US_on)
+        
+        idxCSUSCR = trig_CRs['idxCSUSCR']
+        idxCSUSNOCR = trig_CRs['idxCSUSNOCR']
+        idxCSCR = trig_CRs['idxCSCR']
+        idxCSNOCR = trig_CRs['idxCSNOCR']
+        idxNOCR = trig_CRs['idxNOCR']
+        idxCR = trig_CRs['idxCR']
+        idxUS = trig_CRs['idxUS']
+        idxCSCSUS=np.concatenate([idx_CS,idx_CS_US]) 
+    
+    with open(base_folder+'traces.pk','r') as f:    
+                trdict= pickle.load(f)
+                traces_DFF=trdict['traces_DFF']
+    
+    triggers_img=np.array(triggers_img)   
+    idx_expected_US = np.zeros_like(triggers_img[:,1]) 
+    idx_expected_US = triggers_img[:,1]
+    idx_expected_US[idx_CS]=np.nanmedian(triggers_img[:,1]) 
+    triggers_img =  np.concatenate([triggers_img,   idx_expected_US[:,np.newaxis].astype(np.int)],-1)   
+    
+    img_descr=cb.utils.get_image_description_SI(glob(base_folder+'2016*.tif')[0])[0]
+    f_rate=img_descr['scanimage.SI.hRoiManager.scanFrameRate']
+    print f_rate              
+    #%%
+    time_before=3
+    time_after=3
+    wheel,time_w=res_bt['wheel'],res_bt['time']
+    eye=eye_traces
+    time_e=tm
+    wheel_mat=np.array([wh[np.logical_and(time_w>-time_before,time_w<time_after)] for wh in wheel])
+    eye_mat=np.array([e[np.logical_and(time_e>-time_before,time_e<time_after)] for e in eye])
+    
+    time_w_mat=time_w[np.logical_and(time_w>-time_before,time_w<time_after)]
+    time_e_mat=time_e[np.logical_and(time_e>-time_before,time_e<time_after)]
+    traces_mat,time_mat=extract_traces_mat(traces_DFF,triggers_img[:,1],f_rate,time_before=time_before,time_after=time_after)
+#    traces_mat,time_mat=scipy.signal.resample(traces_mat, len(time_w_mat),t=time_mat ,axis=-1)
+    #%
+    wheel_traces, movement_at_CS, trigs_mov = process_wheel_traces(np.array(res_bt['wheel']),tm,thresh_MOV_iqr=thresh_MOV_iqr,time_CS_on=time_CS_on_MOV,time_US_on=time_US_on_MOV)    
+    print 'fraction with movement:'    
+    print len(trigs_mov['idxMOV'])*1./len(trigs_mov['idxNO_MOV'])
+    
+    #%%
+    triggers_out=dict()
+    triggers_out['mn_idx_CS_US'] =np.intersect1d(idx_CS_US,trigs_mov['idxNO_MOV'])
+    triggers_out['nm_idx_US']= np.intersect1d(idx_US,trigs_mov['idxNO_MOV'])
+    triggers_out['nm_idx_CS']= np.intersect1d(idx_CS,trigs_mov['idxNO_MOV'])
+    triggers_out['nm_idxCSUSCR'] = np.intersect1d(idxCSUSCR,trigs_mov['idxNO_MOV'])
+    triggers_out['nm_idxCSUSNOCR'] = np.intersect1d(idxCSUSNOCR,trigs_mov['idxNO_MOV'])
+    triggers_out['nm_idxCSCR'] = np.intersect1d(idxCSCR,trigs_mov['idxNO_MOV'])
+    triggers_out['nm_idxCSNOCR'] = np.intersect1d(idxCSNOCR,trigs_mov['idxNO_MOV'])
+    triggers_out['nm_idxNOCR'] = np.intersect1d(idxNOCR,trigs_mov['idxNO_MOV'])
+    triggers_out['nm_idxCR'] = np.intersect1d(idxCR,trigs_mov['idxNO_MOV'])
+    triggers_out['nm_idxUS'] = np.intersect1d(idxUS,trigs_mov['idxNO_MOV'])
+    triggers_out['nm_idxCSCSUS']=np.intersect1d(idxCSCSUS,trigs_mov['idxNO_MOV'])  
+    #%%
+    
+    newf_rate=1/np.median(np.diff(time_mat))
+    ftraces=traces_mat.copy()  
+    samples_before=np.int(time_before*newf_rate)  
+    ISI_frames=np.int(ISI*newf_rate)
+    ftraces=ftraces-np.median(ftraces[:,:,np.logical_and(time_mat>-1,time_mat<-ISI)],axis=(2))[:,:,np.newaxis]   
+    amplitudes_responses=np.mean(ftraces[:,:,np.logical_and(time_mat>-.03,time_mat<.04)],-1)
+    cell_responsiveness=np.median(amplitudes_responses[triggers_out['nm_idxCSCSUS']],axis=0)
+    idx_responsive = np.where(cell_responsiveness>threshold_responsiveness)[0]
+    fraction_responsive=len(np.where(cell_responsiveness>threshold_responsiveness)[0])*1./np.shape(ftraces)[1]
+
+    print 'fraction responsive:'    
+    print fraction_responsive
+    
+    ftraces=ftraces[:,cell_responsiveness>threshold_responsiveness,:]
+    amplitudes_responses=np.mean(ftraces[:,:,samples_before+ISI_frames-1:samples_before+ISI_frames+1],-1)
+    
+    traces=dict()       
+    traces['fluo_traces']=ftraces
+    traces['eye_traces']=eye_mat
+    traces['wheel_traces']=wheel_mat
+    traces['time_fluo']=time_mat
+    traces['time_eye']=time_e_mat
+    traces['time_wheel']=time_w_mat
+    
+    amplitudes=dict()
+    amplitudes['amplitudes_fluo']=amplitudes_responses
+    amplitudes['amplitudes_eyelid']=amplitudes_at_US
+    
+    masks=dict()
+    masks['A_each']=[A[:,idx_responsive] for A in A_each]
+    masks['b_each']=b_each
+    masks['f_each']=f_each
+    
+    return traces, masks, triggers_out, amplitudes, ISI 
+    
+#%%
+def fast_process_day(base_folder,min_radius=3,max_radius=4):
+    import pickle
+    import pylab as pl
+    try:
+        tmpl_name=glob(base_folder+'*template_total.npz')[0]
+        
+        print tmpl_name
+        with np.load(tmpl_name) as ld:
+            mov_names_each=ld['movie_names']
+        
+        f_results= glob(base_folder+'*results_analysis.npz')
+        f_results.sort()
+        A_s,C_s, YrA_s, Cn_s, b_s, f_s, shape =  load_results(f_results)     
+    #    B_s, lab_imgs, cm_s  = threshold_components(A_s,shape, min_size=10,max_size=50,max_perc=.5)
+        traces=[]
+        traces_BL=[]
+        traces_DFF=[]
+        
+        for idx, mov_names in enumerate(mov_names_each):
+            A=A_s[idx]
+        #    C=C_s[idx][neurons[idx]]
+        #    YrA=YrA_s[idx][neurons[idx]]
+            b=b_s[idx]
+            f=f_s[idx]
+            chunk_sizes=[]
+            for mv in mov_names:
+                    base_name=os.path.splitext(os.path.split(mv)[-1])[0]
+                    with np.load(base_folder+base_name+'.npz') as ld:
+                        TT=len(ld['shifts'])            
+                    chunk_sizes.append(TT)
+        
+            
+            masks_ws,pos_examples,neg_examples=cse.utilities.extract_binary_masks_blob(A, min_radius, \
+            shape, num_std_threshold=1, minCircularity= 0.5, minInertiaRatio = 0.2,minConvexity = .8)        
+            #sizes=np.sum(masks_ws,(1,2))
+            #pos_examples=np.intersect1d(pos_examples,np.where(sizes<max_radius**2*np.pi)[0])     
+            print len(pos_examples)
+    #        pl.close()
+    #        pl.imshow(np.mean(masks_ws[pos_examples],0))
+            pl.pause(.1)
+            #A=A.tocsc()[:,pos_examples]
+            traces,traces_DFF,traces_BL = generate_linked_traces(mov_names,chunk_sizes,A,b,f)        
+            
+            np.savez(f_results[idx][:-4]+'_masks.npz',masks_ws=masks_ws,pos_examples=pos_examples, neg_examples=neg_examples, A=A.todense(),b=b,f=f)
+            
+            with open(f_results[idx][:-4]+'_traces.pk','w') as f: 
+                pickle.dump(dict(traces=traces,traces_BL=traces_BL,traces_DFF=traces_DFF),f)   
+        
+    except:
+        print 'Failed'
+        return False
+        
+    return True
