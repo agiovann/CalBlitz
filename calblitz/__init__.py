@@ -1,4 +1,4 @@
-import traces,movies,timeseries,utils, rois, behavior
+import traces,movies,timeseries,utils, rois, behavior, granule_cells.utils_granule
 from movies import movie,load,load_movie_chain,to_3D
 from traces import trace
 from timeseries import concatenate

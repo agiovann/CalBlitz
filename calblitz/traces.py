@@ -6,17 +6,12 @@ author: agiovann
 """
 #%%
 import cv2
-import sys
-import copy
-import warnings
 import numpy as np
 import pylab as pl
 pl.ion()
 import timeseries as ts
 
 #%%
-import numpy as np
-
 class trace(ts.timeseries):
     """ 
     Class representing a trace.
