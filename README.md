@@ -24,7 +24,7 @@ import numpy as np
 
 
 #%%
-filename='demoMovie.tif'
+filename='movies/demoMovie_PC.tif'
 frameRate=15.62;
 start_time=0;
 #%%
