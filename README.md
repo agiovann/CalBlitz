@@ -136,6 +136,7 @@ conda install scikit-image
 pip install pims
 conda install -c menpo opencv3=3.1.0
 pip install tifffile
+conda install ipyparallel
 ```
 
 MAC OS X 
@@ -151,7 +152,7 @@ conda install scikit-image
 pip install pims
 pip install tifffile
 conda install -c menpo opencv3=3.1.0
-
+conda install ipyparallel
 ```
 
 
@@ -168,7 +169,7 @@ conda install scikit-image
 pip install pims
 pip install tifffile
 conda install -c menpo opencv3=3.1.0
-
+conda install ipyparallel
 ```
 if this does not work, you need to manually install opencv (pain in the neck)
 
