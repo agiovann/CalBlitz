@@ -128,7 +128,7 @@ LINUX
 install anaconda python distribution, then in your terminal type
 
 ```
-conda create --name calblitz python matplotlib scipy ipython h5py 
+conda create --name calblitz python=2.7 python matplotlib scipy ipython h5py 
 source activate calblitz
 conda install pip
 conda install scikit-learn (or pip install scikit-learn)
@@ -143,7 +143,7 @@ MAC OS X
 install anaconda python distribution, then in your terminal type
 
 ```
-conda create --name calblitz python matplotlib scipy ipython h5py 
+conda create --name calblitz python=2.7 python matplotlib scipy ipython h5py 
 source activate calblitz
 conda install pip
 conda install scikit-learn (or pip install scikit-learn)
@@ -154,14 +154,13 @@ conda install -c menpo opencv3=3.1.0
 
 ```
 
-```
 
 WINDOWS
 
 install anaconda python distribution, then in your terminal type
 
 ```
-conda create --name calblitz python matplotlib scipy ipython h5py 
+conda create --name calblitz python=2.7 python matplotlib scipy ipython h5py 
 source activate calblitz
 conda install pip
 conda install scikit-learn (or pip install scikit-learn)
