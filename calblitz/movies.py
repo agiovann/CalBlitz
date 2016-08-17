@@ -348,7 +348,7 @@ class movie(ts.timeseries):
             raise ValueError("All pixels must be positive")
 
         numFrames,linePerFrame,pixPerLine=np.shape(self)
-        downsampfact=int(secsWindow*1./self.fr);
+        downsampfact=int(secsWindow*self.fr);
         elm_missing=int(np.ceil(numFrames*1.0/downsampfact)*downsampfact-numFrames)
         padbefore=int(np.floor(elm_missing/2.0))
         padafter=int(np.ceil(elm_missing/2.0))
