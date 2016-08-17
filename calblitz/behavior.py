@@ -5,7 +5,6 @@ OPTICAL FLOW
 @author: agiovann
 """
 #%%
-import ca_source_extraction as cse
 import calblitz as cb
 import numpy as np
 import pylab as pl
