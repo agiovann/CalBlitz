@@ -22,6 +22,8 @@ from scipy.spatial.distance import cdist
 from scipy import ndimage
 from scipy.optimize import linear_sum_assignment   
 from sklearn.utils.linear_assignment_ import linear_assignment    
+import re
+
 #%% Process triggers
 def extract_triggers(file_list,read_dictionaries=False): 
     
@@ -890,6 +892,8 @@ def extract_traces_mat(traces,triggers_idx,f_rate,time_before=2.7,time_after=5.3
     
     
     return traces_mat,time_mat
+
+     
 #%%
 def load_data_from_stored_results(base_folder, load_masks=False, thresh_CR = 0.1,threshold_responsiveness=0.1,
                                   is_blob=True,time_CR_on=-.1,time_US_on=.05,thresh_MOV_iqr=1000,time_CS_on_MOV=-.25,time_US_on_MOV=0):
@@ -1114,3 +1118,103 @@ def fast_process_day(base_folder,min_radius=3,max_radius=4):
         return False
         
     return True
+#%%
+def process_fast_process_day(base_folders,save_name='temp_save.npz'):
+    """
+    Use this after having used fast_process_day
+    
+    Parameters:
+    ----------
+    
+    base_folders: list of path to base folders
+    
+    Returns:
+    --------
+    
+    triggers_chunk_fluo: triggers associated to fluorescence (one per chunk)
+    eyelid_chunk: eyelid (one per chunk)
+    wheel_chunk: wheel (one per chunk)
+    triggers_chunk_bh: triggers associated to behavior(one per chunk)
+    tm_behav: time of behavior (one per chunk)
+    names_chunks: names of the file associated to each chunk(one per chunk)
+    fluo_chunk: fluorescence traces (one per chunk)
+    pos_examples_chunks: indexes of examples that were classified as good by the blob detector (one per chunk)
+    A_chunks: masks associated   (one per chunk)
+    """
+    triggers_chunk_fluo = []  
+    eyelid_chunk = []
+    wheel_chunk = []
+    triggers_chunk_bh = []
+    tm_behav=[]
+    names_chunks=[]
+    fluo_chunk=[]
+    pos_examples_chunks=[]     
+    A_chunks=[]  
+    for base_folder in base_folders:
+        try:         
+            print (base_folder)
+            with np.load(os.path.join(base_folder,'all_triggers.npz')) as ld:
+                triggers=ld['triggers']
+                trigger_names=ld['trigger_names']
+            
+            with np.load(glob(os.path.join(base_folder,'*-template_total.npz'))[0]) as ld:
+                movie_names=ld['movie_names']
+                template_each=ld['template_each']
+            
+            
+            idx_chunks=[] 
+            for name_chunk in movie_names:
+                idx_chunks.append([np.int(re.search('_00[0-9][0-9][0-9]_0',nm).group(0)[2:6])-1 for nm in name_chunk])
+              
+            
+            
+            with np.load(base_folder+'behavioral_traces.npz') as ld: 
+                res_bt = dict(**ld)
+                tm=res_bt['time']
+                f_rate_bh=1/np.median(np.diff(tm))
+                ISI=np.median([rs[3]-rs[2] for rs in res_bt['trial_info'][res_bt['idx_CS_US']]])
+                trig_int=np.hstack([((res_bt['trial_info'][:,2:4]-res_bt['trial_info'][:,0][:,None])*f_rate_bh),res_bt['trial_info'][:,-1][:,np.newaxis]]).astype(np.int)
+                trig_int[trig_int<0]=-1
+                trig_int=np.hstack([trig_int,len(tm)+trig_int[:,:1]*0])
+                trig_US=np.argmin(np.abs(tm))
+                trig_CS=np.argmin(np.abs(tm+ISI))
+                trig_int[res_bt['idx_CS_US'],0]=trig_CS
+                trig_int[res_bt['idx_CS_US'],1]=trig_US
+                trig_int[res_bt['idx_US'],1]=trig_US
+                trig_int[res_bt['idx_CS'],0]=trig_CS
+                eye_traces=np.array(res_bt['eyelid']) 
+                wheel_traces=np.array(res_bt['wheel'])
+        
+                
+             
+             
+            fls=glob(os.path.join(base_folder,'*.results_analysis_traces.pk'))
+            fls.sort()
+            fls_m=glob(os.path.join(base_folder,'*.results_analysis_masks.npz'))
+            fls_m.sort()     
+             
+            
+            for indxs,name_chunk,fl,fl_m in zip(idx_chunks,movie_names,fls,fls_m):
+                if np.all([nmc[:-4] for nmc in name_chunk] == trigger_names[indxs]):
+                    triggers_chunk_fluo.append(triggers[indxs,:])
+                    eyelid_chunk.append(eye_traces[indxs,:])
+                    wheel_chunk.append(wheel_traces[indxs,:])
+                    triggers_chunk_bh.append(trig_int[indxs,:])
+                    tm_behav.append(tm)
+                    names_chunks.append(fl)
+                    with open(fl,'r') as f: 
+                        tr_dict=pickle.load(f)   
+                        print(fl)
+                        fluo_chunk.append(tr_dict['traces_DFF'])
+                    with np.load(fl_m) as ld:
+                        A_chunks.append(scipy.sparse.coo_matrix(ld['A']))
+                        pos_examples_chunks.append(ld['pos_examples'])                
+                else:
+                    raise Exception('Names of triggers not matching!')
+        except:
+            print("ERROR in:"+base_folder)  
+            
+        if save_name is not None:
+            np.savez(save_name,triggers_chunk_fluo=triggers_chunk_fluo, triggers_chunk_bh=triggers_chunk_bh, eyelid_chunk=eyelid_chunk, wheel_chunk=wheel_chunk, tm_behav=tm_behav, fluo_chunk=fluo_chunk,names_chunks=names_chunks,pos_examples_chunks=pos_examples_chunks,A_chunks=A_chunks)            
+            
+        return triggers_chunk_fluo, eyelid_chunk,wheel_chunk ,triggers_chunk_bh ,tm_behav,names_chunks,fluo_chunk,pos_examples_chunks,A_chunks
