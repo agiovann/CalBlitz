@@ -161,7 +161,7 @@ install anaconda python distribution, then in your terminal type
 
 ```
 conda create --name calblitz python=2.7 python matplotlib scipy ipython h5py 
-source activate calblitz
+activate calblitz
 conda install pip
 conda install scikit-learn (or pip install scikit-learn)
 conda install scikit-image
@@ -181,7 +181,7 @@ http://opencv-python-tutroals.readthedocs.org/en/latest/py_tutorials/py_setup/py
 If you have problems installing opencv remember to match your architecture (32/64 bits) and to make sure that you have the required libraries installed
 
 ### Install the package
-
+```
 clone the git package 
 
 git clone https://github.com/agiovann/CalBlitz.git
@@ -189,6 +189,7 @@ git clone https://github.com/agiovann/CalBlitz.git
 or download the zipped version 
 
 cd CalBlitz/ 
+```
 
 ## Tests
 type 
