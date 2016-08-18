@@ -57,6 +57,9 @@ if resizeMovie:
 else:
     fx,fy,fz=1,1,1
 
+#%% debleach the signal by exponential fit of intensity
+m=m.debleach()
+
 #%% compute delta f over f (DF/F)
 initTime=time.time()
 m=m-np.min(m)+1;
@@ -137,6 +140,7 @@ pip install pims
 conda install -c menpo opencv3=3.1.0
 pip install tifffile
 conda install ipyparallel
+conda install scipy
 ```
 
 MAC OS X
@@ -153,6 +157,7 @@ pip install pims
 pip install tifffile
 conda install -c menpo opencv3=3.1.0
 conda install ipyparallel
+conda install scipy
 ```
 
 
@@ -170,6 +175,7 @@ pip install pims
 pip install tifffile
 conda install -c menpo opencv3=3.1.0
 conda install ipyparallel
+conda install scipy
 ```
 if this does not work, you need to manually install opencv (pain in the neck)
 

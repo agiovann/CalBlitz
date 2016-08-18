@@ -13,6 +13,7 @@ import scipy
 import sklearn
 import warnings
 import numpy as np
+import scipy as sp
 from sklearn.decomposition import NMF, IncrementalPCA, FastICA
 from sklearn.cluster import KMeans
 from sklearn.metrics.pairwise import euclidean_distances
@@ -319,6 +320,33 @@ class movie(ts.timeseries):
 
         return self
 
+
+    def debleach(self):
+        """ Debleach by fiting an exponential to the median intensity.
+        """
+
+        t, h, w = self.shape
+        x = np.arange(t)
+        y = np.median(self.reshape(t, -1), axis=1)
+
+        def func(x, a, c, d):
+            return a*np.exp(-c*x)+d
+
+        popt, pcov = sp.optimize.curve_fit(func, x, y, p0=(1, 1e-6, 1))
+
+        import matplotlib.pyplot as plt
+        plt.figure()
+        plt.plot(x, y)
+        plt.plot(x, func(x, *popt), 'r--')
+        plt.legend({'Original', 'Fit'})
+        plt.show()
+
+        norm = func(x, *popt) - np.median(y[:])
+
+        for frame in range(t):
+            self[frame, :, :] = self[frame, :, :] - norm[frame]
+
+        return self
 
     def crop(self,crop_top=0,crop_bottom=0,crop_left=0,crop_right=0,crop_begin=0,crop_end=0):
         """ Crop movie
