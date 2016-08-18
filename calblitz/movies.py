@@ -325,6 +325,10 @@ class movie(ts.timeseries):
         """ Debleach by fiting an exponential to the median intensity.
         """
 
+        if type(self[0, 0, 0]) is not np.float32:
+            warnings.warn('Casting the array to float 32')
+            self = np.asanyarray(self, dtype=np.float32)
+
         t, h, w = self.shape
         x = np.arange(t)
         y = np.median(self.reshape(t, -1), axis=1)
@@ -334,12 +338,12 @@ class movie(ts.timeseries):
 
         popt, pcov = sp.optimize.curve_fit(func, x, y, p0=(1, 1e-6, 1))
 
-        import matplotlib.pyplot as plt
-        plt.figure()
-        plt.plot(x, y)
-        plt.plot(x, func(x, *popt), 'r--')
-        plt.legend({'Original', 'Fit'})
-        plt.show()
+        # import matplotlib.pyplot as plt
+        # plt.figure()
+        # plt.plot(x, y)
+        # plt.plot(x, func(x, *popt), 'r--')
+        # plt.legend({'Original', 'Fit'})
+        # plt.show()
 
         norm = func(x, *popt) - np.median(y[:])
 
