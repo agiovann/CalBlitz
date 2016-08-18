@@ -61,7 +61,7 @@ else:
 initTime=time.time()
 m=m-np.min(m)+1;
 m,mbl=m.computeDFF(secsWindow=10,quantilMin=50)
-print 'elapsed time:' + str(time.time()-initTime) 
+print 'elapsed time:' + str(time.time()-initTime)
 
 #%% denoise and local correlation. this makes the movie look much better
 if False:
@@ -72,10 +72,10 @@ if False:
 print 'Computing PCA + ICA...'
 
 spcomps=m.IPCA_stICA(componentsPCA=70,componentsICA = 50, mu=1, batch=1000000, algorithm='parallel', whiten=True, ICAfun='logcosh', fun_args=None, max_iter=2000, tol=1e-8, w_init=None, random_state=None);
-print 'elapsed time:' + str(time.time()-initTime) 
+print 'elapsed time:' + str(time.time()-initTime)
 cb.matrixMontage(spcomps,cmap=pl.cm.gray) # visualize components
- 
-#%% extract ROIs from spatial components 
+
+#%% extract ROIs from spatial components
 #_masks,masks_grouped=m.extractROIsFromPCAICA(spcomps, numSTD=6, gaussiansigmax=2 , gaussiansigmay=2)
 _masks,_=cb.extractROIsFromPCAICA(spcomps, numSTD=4.0, gaussiansigmax=.1 , gaussiansigmay=.2)
 #cb.matrixMontage(np.asarray(_masks),cmap=pl.cm.gray)
@@ -89,7 +89,7 @@ for mask in _masks:
     if (numPixels>minPixels and numPixels<maxPixels):
 #        print numPixels
         masks_tmp.append(mask>0)
-        
+
 masks_tmp=np.asarray(masks_tmp,dtype=np.float16)
 all_masksForPlot_tmp=[kk*(ii+1)*1.0 for ii,kk in enumerate(masks_tmp)]
 len(all_masksForPlot_tmp)
@@ -123,12 +123,12 @@ cb.matrixMontage(np.asarray(all_masksForPlot_tmp),cmap=pl.cm.gray)
 
 ###Prerequisites
 
-LINUX 
+LINUX
 
 install anaconda python distribution, then in your terminal type
 
 ```
-conda create --name calblitz python=2.7 python matplotlib scipy ipython h5py 
+conda create --name calblitz python=2.7 python matplotlib scipy ipython h5py
 source activate calblitz
 conda install pip
 conda install scikit-learn (or pip install scikit-learn)
@@ -139,12 +139,12 @@ pip install tifffile
 conda install ipyparallel
 ```
 
-MAC OS X 
+MAC OS X
 
 install anaconda python distribution, then in your terminal type
 
 ```
-conda create --name calblitz python=2.7 python matplotlib scipy ipython h5py 
+conda create --name calblitz python=2.7 python matplotlib scipy ipython h5py
 source activate calblitz
 conda install pip
 conda install scikit-learn (or pip install scikit-learn)
@@ -161,7 +161,7 @@ WINDOWS
 install anaconda python distribution, then in your terminal type
 
 ```
-conda create --name calblitz python=2.7 python matplotlib scipy ipython h5py 
+conda create --name calblitz python=2.7 python matplotlib scipy ipython h5py
 activate calblitz
 conda install pip
 conda install scikit-learn (or pip install scikit-learn)
@@ -176,23 +176,23 @@ if this does not work, you need to manually install opencv (pain in the neck)
 
 
 
-For opencv windows installation check [here]( 
+For opencv windows installation check [here](
 http://opencv-python-tutroals.readthedocs.org/en/latest/py_tutorials/py_setup/py_setup_in_windows/py_setup_in_windows.html)
 
 If you have problems installing opencv remember to match your architecture (32/64 bits) and to make sure that you have the required libraries installed
 
 ### Install the package
-clone the git package 
+clone the git package
 ```
 git clone https://github.com/agiovann/CalBlitz.git
 ```
-or download the zipped version 
+or download the zipped version
 ```
-cd CalBlitz/ 
+cd CalBlitz/
 ```
 
 ## Tests
-type 
+type
 
 ```
 python test_software.py
@@ -202,7 +202,7 @@ Add the CalBlitz folder to your Python path (or call the script from within the 
 
 ## API Reference
 
-TODO 
+TODO
 
 
 ## Contributors
@@ -220,7 +220,7 @@ You should have received a copy of the GNU General Public License along with thi
 
 ## Troubleshooting
 
-1. Depending on terminal program used anaconda may not be in default path. In this case, add anaconda to bin to path: 
+1. Depending on terminal program used anaconda may not be in default path. In this case, add anaconda to bin to path:
 
 ```
 export PATH=//anaconda/bin:$PATH
@@ -229,21 +229,24 @@ export PATH=//anaconda/bin:$PATH
 2. Error: No packages found in current osx­64 channels matching: pims
  install pip: conda install pip
 ­ use pip to install pims: pip install pims
-­ if pims causes kernel crash then use 
+­ if pims causes kernel crash then use
 
  ``` python
  pip install pims ­­--upgrade
  ```
- 
-3. If you get another compile time error installing pims, install the following 
+
+3. If you get another compile time error installing pims, install the following
 
 [Microsoft C++ ompiler for Python](https://www.microsoft.com/en-us/download/confirmation.aspx?id=44266)
 
-by typing 
+by typing
 
-``` 
-msiexec /i <path to downloaded MSI File> ALLUSERS=1 
+```
+msiexec /i <path to downloaded MSI File> ALLUSERS=1
 ```
 
-
-­
+4. If you get an "insecure string pickle" ValueError, install libav and mplayer. On Mac OS X, this can be easily done with brew:
+```
+brew install libav
+brew install mplayer
+­```
