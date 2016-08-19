@@ -1,10 +1,11 @@
 # -*- coding: utf-8 -*-
 """
-Spyder Editor
-
-author: agiovann
+Created on Tue Jun 30 20:56:07 2015
+@author: agiovann
+Updated on Fri Aug 19 17:30:11 2016
+@author: deep-introspection
 """
-#%%
+
 import cv2
 import os
 import sys
@@ -26,7 +27,7 @@ import pylab as pl
 from skimage.external.tifffile import imread
 from tqdm import tqdm
 
-#from ca_source_extraction.utilities import save_memmap,load_memmap
+# from ca_source_extraction.utilities import save_memmap,load_memmap
 
 try:
     plt.ion()
@@ -42,10 +43,11 @@ import timeseries as ts
 from traces import trace
 from utils import display_animation
 
-#%%
+
 class movie(ts.timeseries):
     """
-    Class representing a movie. This class subclasses timeseries, that in turn subclasses ndarray
+    Class representing a movie. This class subclasses timeseries,
+    that in turn subclasses ndarray
 
     movie(input_arr, fr=None,start_time=0,file_name=None, meta_data=None)
 
@@ -62,63 +64,74 @@ class movie(ts.timeseries):
     fr: frame rate
     start_time: time beginning movie, if None it is assumed 0
     meta_data: dictionary including any custom meta data
-    file_name:name associated with the file (for instance path to the original file)
+    file_name: name associated with the file (e.g. path to the original file)
 
     """
-#    def __new__(cls, input_arr,fr=None,start_time=0,file_name=None, meta_data=None,**kwargs):
-    def __new__(cls, input_arr,**kwargs):
+    # def __new__(cls, input_arr, fr=None, start_time=0,
+    #             file_name=None, meta_data=None, **kwargs):
+    def __new__(cls, input_arr, **kwargs):
 
-        if type(input_arr) is np.ndarray or  type(input_arr) is h5py._hl.dataset.Dataset:
-#            kwargs['start_time']=start_time;
-#            kwargs['file_name']=file_name;
-#            kwargs['meta_data']=meta_data;
-            #kwargs['fr']=fr;
-            return super(movie, cls).__new__(cls, input_arr,**kwargs)
+        if (type(input_arr) is np.ndarray) or \
+           (type(input_arr) is h5py._hl.dataset.Dataset):
+            # kwargs['start_time']=start_time;
+            # kwargs['file_name']=file_name;
+            # kwargs['meta_data']=meta_data;
+            # kwargs['fr']=fr;
+            return super(movie, cls).__new__(cls, input_arr, **kwargs)
 
         else:
             raise Exception('Input must be an ndarray, use load instead!')
 
-
-    def motion_correct(self, max_shift_w=5,max_shift_h=5, num_frames_template=None, template=None,method='opencv',remove_blanks=False):
+    def motion_correct(self,
+                       max_shift_w=5,
+                       max_shift_h=5,
+                       num_frames_template=None,
+                       template=None,
+                       method='opencv',
+                       remove_blanks=False):
 
         '''
-        Extract shifts and motion corrected movie automatically, for more control consider the functions extract_shifts and apply_shifts
+        Extract shifts and motion corrected movie automatically,
+        for more control consider the functions extract_shifts and apply_shifts
         Disclaimer, it might change the object itself.
 
         Parameters
         ----------
-        max_shift_w,max_shift_h: maximum pixel shifts allowed when correcting in the width and height direction
-        template: if a good template for frame by frame correlation is available it can be passed. If None it is automatically computed
-        method: depends on what is installed 'opencv' or 'skimage'. 'skimage' is an order of magnitude slower
-        num_frames_template: if only a subset of the movies needs to be loaded for efficiency/speed reasons
+        max_shift_w,max_shift_h: maximum pixel shifts allowed when correcting
+                                 in the width and height direction
+        template: if a good template for frame by frame correlation exists
+                  it can be passed. If None it is automatically computed
+        method: depends on what is installed 'opencv' or 'skimage'. 'skimage'
+                is an order of magnitude slower
+        num_frames_template: if only a subset of the movies needs to be loaded
+                             for efficiency/speed reasons
 
 
         Returns
         -------
         self: motion corected movie, it might change the object itself
-        shifts : tuple, contains shifts in x and y and correlation with template
+        shifts : tuple, contains x & y shifts and correlation with template
         xcorrs: cross correlation of the movies with the template
         template= the computed template
-
         '''
 
         # adjust the movie so that valuse are non negative
 
-        min_val=np.min(np.mean(self,axis=0))
-        self=self-min_val
+        min_val = np.min(np.mean(self, axis=0))
+        self = self-min_val
 
         if template is None:  # if template is not provided it is created
             if num_frames_template is None:
-                num_frames_template=10e7/(512*512)
+                num_frames_template = 10e7/(512*512)
 
-            frames_to_skip=int(np.maximum(1,self.shape[0]/num_frames_template))
+            frames_to_skip = int(np.maximum(1, self.shape[0]/num_frames_template))
             # sometimes it is convenient to only consider a subset of the
             # movie when computing the median
 
-# idx=np.random.randint(0,high=self.shape[0],size=(num_frames_template,))
+            # idx = np.random.randint(0, high=self.shape[0], size=(num_frames_template,))
 
-            submov=self[::frames_to_skip,:].copy()
-            templ=submov.bin_median(); # create template with portion of movie
+            submov = self[::frames_to_skip, :].copy()
+            templ = submov.bin_median() # create template with portion of movie
             shifts,xcorrs=submov.extract_shifts(max_shift_w=max_shift_w, max_shift_h=max_shift_h, template=templ, method=method)  #
             submov.apply_shifts(shifts,interpolation='cubic',method=method)
             template=submov.bin_median()
