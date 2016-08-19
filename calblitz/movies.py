@@ -24,6 +24,7 @@ from scipy.io import loadmat
 from matplotlib import animation
 import pylab as pl
 from skimage.external.tifffile import imread
+from tqdm import tqdm
 
 #from ca_source_extraction.utilities import save_memmap,load_memmap
 
@@ -322,7 +323,7 @@ class movie(ts.timeseries):
 
 
     def debleach(self):
-        """ Debleach by fiting an exponential to the median intensity.
+        """ Debleach by fiting a model to the median intensity.
         """
 
         if type(self[0, 0, 0]) is not np.float32:
@@ -333,20 +334,28 @@ class movie(ts.timeseries):
         x = np.arange(t)
         y = np.median(self.reshape(t, -1), axis=1)
 
-        def func(x, a, c, d):
-            return a*np.exp(-c*x)+d
+        def expf(x, a, b, c):
+            return a*np.exp(-b*x)+c
 
-        popt, pcov = sp.optimize.curve_fit(func, x, y, p0=(1, 1e-6, 1))
+        def linf(x, a, b):
+            return a*x+b
 
+        try:
+            p0 = (y[0]-y[-1], 1e-6, y[-1])
+            popt, pcov = sp.optimize.curve_fit(expf, x, y, p0=p0)
+            y_fit = expf(x, *popt)
+        except:
+            p0 = (float(y[-1]-y[0])/float(x[-1]-x[0]), y[0])
+            popt, pcov = sp.optimize.curve_fit(linf, x, y, p0=p0)
+            y_fit = linf(x, *popt)
+
+        norm = y_fit - np.median(y[:])
         # import matplotlib.pyplot as plt
         # plt.figure()
         # plt.plot(x, y)
-        # plt.plot(x, func(x, *popt), 'r--')
+        # plt.plot(x, y_fit, 'r--')
         # plt.legend({'Original', 'Fit'})
         # plt.show()
-
-        norm = func(x, *popt) - np.median(y[:])
-
         for frame in range(t):
             self[frame, :, :] = self[frame, :, :] - norm[frame]
 
@@ -1112,7 +1121,7 @@ def load_movie_chain(file_list, fr=None, start_time=0,
     bottom, top, left, right to load only portion of the field of view
     '''
     mov = []
-    for f in file_list:
+    for f in tqdm(file_list):
         m = load(f, fr=fr, start_time=start_time,
                  meta_data=meta_data, subindices=subindices)
         if m.ndim == 2:
