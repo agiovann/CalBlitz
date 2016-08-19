@@ -32,7 +32,11 @@ print 'elapsed time:' + str(time.time()-initTime)
 print 'Motion correction...'
 max_shift_h = 10
 max_shift_w = 10
-m, shifts, xcorrs, template = m.motion_correct(max_shift_w=max_shift_w, max_shift_h=max_shift_h, num_frames_template=None, template = None, method='opencv')
+m, shifts, xcorrs, template = m.motion_correct(max_shift_w=max_shift_w,
+                                               max_shift_h=max_shift_h,
+                                               num_frames_template=None,
+                                               template=None,
+                                               method='opencv')
 
 max_h, max_w = np.max(shifts, axis=0)
 min_h, min_w = np.min(shifts, axis=0)
