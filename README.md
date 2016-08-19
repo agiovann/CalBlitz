@@ -10,121 +10,125 @@ Recent advances in calcium imaging acquisition techniques are creating datasets 
 
 ## Example Code
 
-```python
-#% add required packages
-import h5py
+```
+#%% initialization
 import calblitz as cb
 import time
 import pylab as pl
 import numpy as np
-#% set basic ipython functionalities
-#pl.ion()
-#%load_ext autoreload
-#%autoreload 2
 
-
-#%%
-filename='movies/demoMovie_PC.tif'
-frameRate=15.62;
-start_time=0;
-#%%
-filename_py=filename[:-4]+'.npz'
-filename_hdf5=filename[:-4]+'.hdf5'
-filename_mc=filename[:-4]+'_mc.npz'
+initTime = time.time()
+filename = 'movies/demoMovie_PC.tif'
+filename_hdf5 = filename[:-4]+'.hdf5'
 
 #%% load and motion correct movie (see other Demo for more details)
-m=cb.load(filename, fr=frameRate,start_time=start_time);
-#%% automatic parameters motion correction
-max_shift_h=10;
-max_shift_w=10;
-m,shifts,xcorrs,template=m.motion_correct(max_shift_w=max_shift_w,max_shift_h=max_shift_h, num_frames_template=None, template = None,method='opencv')
+print 'Loading data...'
+frameRate = 15.62
+start_time = 0
+m = cb.load(filename, fr=frameRate, start_time=start_time)
+print 'elapsed time:' + str(time.time()-initTime)
 
-max_h,max_w= np.max(shifts,axis=0)
-min_h,min_w= np.min(shifts,axis=0)
-m=m.crop(crop_top=max_h,crop_bottom=-min_h+1,crop_left=max_w,crop_right=-min_w,crop_begin=0,crop_end=0)
+#%% automatic parameters motion correction
+print 'Motion correction...'
+max_shift_h = 10
+max_shift_w = 10
+m, shifts, xcorrs, template = m.motion_correct(max_shift_w=max_shift_w, max_shift_h=max_shift_h, num_frames_template=None, template = None, method='opencv')
+
+max_h, max_w = np.max(shifts, axis=0)
+min_h, min_w = np.min(shifts, axis=0)
+m = m.crop(crop_top=max_h,
+           crop_bottom=-min_h+1,
+           crop_left=max_w,
+           crop_right=-min_w,
+           crop_begin=0,
+           crop_end=0)
+print 'elapsed time:' + str(time.time()-initTime)
 
 #%% play movie
 print 'Playing movie, press q to stop...'
-#m.play(fr=50,gain=3.0,magnification=1)
+m.play(fr=50, gain=3.0, magnification=1)
 
-#%% resize to increase SNR and have better convergence of segmentation algorithms
-resizeMovie=False
+#%% resize to increase SNR and convergence of segmentation algorithms
+print 'Resizing data...'
+resizeMovie = False
 if resizeMovie:
-    fx=.5; # downsample a factor of four along x axis
-    fy=.5;
-    fz=.2; # downsample  a factor of 5 across time dimension
-    m=m.resize(fx=fx,fy=fy,fz=fz)
+    fx = .5  # downsample a factor of two along x axis
+    fy = .5  # downsample a factor of two along y axis
+    fz = .2  # downsample a factor of 5 across time dimension
+    m = m.resize(fx=fx, fy=fy, fz=fz)
 else:
-    fx,fy,fz=1,1,1
+    fx, fy, fz = 1, 1, 1
+print 'elapsed time:' + str(time.time()-initTime)
 
-#%% debleach the signal by exponential fit of intensity
-m=m.debleach()
+#%% debleach the signal by fitting a model on median intensity
+print 'Debleaching data...'
+m = m.debleach()
+print 'elapsed time:' + str(time.time()-initTime)
 
 #%% compute delta f over f (DF/F)
-initTime=time.time()
-m=m-np.min(m)+1;
-m,mbl=m.computeDFF(secsWindow=10,quantilMin=50)
+print 'Computing DF/F...'
+m = m - np.min(m) + 1
+m, mbl = m.computeDFF(secsWindow=10, quantilMin=50)
 print 'elapsed time:' + str(time.time()-initTime)
 
 #%% denoise and local correlation. this makes the movie look much better
-if False:
-    loc_corrs=m.local_correlations(eight_neighbours=True)
-    m=m.IPCA_denoise(components = 100, batch = 100000)
-    m=m*loc_corrs
+print 'Denoising data...'
+loc_corrs = m.local_correlations(eight_neighbours=True)
+m = m.IPCA_denoise(components=100, batch=100000)
+m = m * loc_corrs
+print 'elapsed time:' + str(time.time()-initTime)
+
 #%% compute spatial components via ICA PCA
 print 'Computing PCA + ICA...'
-
-spcomps=m.IPCA_stICA(componentsPCA=70,componentsICA = 50, mu=1, batch=1000000, algorithm='parallel', whiten=True, ICAfun='logcosh', fun_args=None, max_iter=2000, tol=1e-8, w_init=None, random_state=None);
+spcomps = m.IPCA_stICA(componentsPCA=70, componentsICA=50,
+                       mu=1, batch=1000000, algorithm='parallel',
+                       whiten=True, ICAfun='logcosh', fun_args=None,
+                       max_iter=2000, tol=1e-8, w_init=None, random_state=None)
 print 'elapsed time:' + str(time.time()-initTime)
-cb.matrixMontage(spcomps,cmap=pl.cm.gray) # visualize components
+cb.matrixMontage(spcomps, cmap=pl.cm.gray)  # visualize components
 
 #%% extract ROIs from spatial components
-#_masks,masks_grouped=m.extractROIsFromPCAICA(spcomps, numSTD=6, gaussiansigmax=2 , gaussiansigmay=2)
-_masks,_=cb.extractROIsFromPCAICA(spcomps, numSTD=4.0, gaussiansigmax=.1 , gaussiansigmay=.2)
-#cb.matrixMontage(np.asarray(_masks),cmap=pl.cm.gray)
+print 'Extracting ROIs...'
+_masks, _ = cb.extractROIsFromPCAICA(spcomps, numSTD=4.0,
+                                     gaussiansigmax=.1, gaussiansigmay=.2)
+cb.matrixMontage(np.asarray(_masks), cmap=pl.cm.gray)
 
-#%%  extract single ROIs from each mask
-minPixels=20;
-maxPixels=400;
-masks_tmp=[];
+#%% extract single ROIs from each mask
+minPixels, maxPixels = 20, 400
+masks_tmp = []
 for mask in _masks:
-    numPixels=np.sum(np.array(mask));        
-    if (numPixels>minPixels and numPixels<maxPixels):
-#        print numPixels
-        masks_tmp.append(mask>0)
-
-masks_tmp=np.asarray(masks_tmp,dtype=np.float16)
-all_masksForPlot_tmp=[kk*(ii+1)*1.0 for ii,kk in enumerate(masks_tmp)]
+    numPixels = np.sum(np.array(mask))
+    if (numPixels > minPixels and numPixels < maxPixels):
+        # print numPixels
+        masks_tmp.append(mask > 0)
+masks_tmp = np.asarray(masks_tmp, dtype=np.float16)
+all_masksForPlot_tmp = [kk*(ii+1)*1.0 for ii, kk in enumerate(masks_tmp)]
 len(all_masksForPlot_tmp)
+print 'elapsed time:' + str(time.time()-initTime)
 
-
-#%%
-# reshape dendrites if required(if the movie was resized)
-if fx != 1 or fy !=1:
-    mdend=cb.movie(np.array(masks_tmp,dtype=np.float32), fr=1);
-    mdend=mdend.resize(fx=1/fx,fy=1/fy)
-    all_masks=mdend;
+#%% reshape dendrites if required (if the movie was resized)
+if fx != 1 or fy != 1:
+    mdend = cb.movie(np.array(masks_tmp, dtype=np.float32), fr=1)
+    mdend = mdend.resize(fx=1/fx, fy=1/fy)
+    all_masks = mdend
 else:
-    all_masks=masks_tmp              
+    all_masks = masks_tmp
+all_masksForPlot = [kk*(ii+1)*1.0 for ii, kk in enumerate(all_masks)]
 
-all_masksForPlot=[kk*(ii+1)*1.0 for ii,kk in enumerate(all_masks)]
-
-
-#%%
-mask_show=np.max(np.asarray(all_masksForPlot_tmp,dtype=np.float16),axis=0);
-loc_corrs=m.local_correlations(eight_neighbours=True)
-#pl.subplot(2,1,1)
-pl.imshow(loc_corrs,cmap=pl.cm.gray,vmin=0.5,vmax=1)
-pl.imshow(mask_show>0,alpha=.3,vmin=0)
-#%%
-cb.matrixMontage(np.asarray(all_masksForPlot_tmp),cmap=pl.cm.gray)
-
+#%% final visualization
+print 'Visualization...'
+mask_show = np.max(np.asarray(all_masksForPlot_tmp, dtype=np.float16), axis=0)
+loc_corrs = m.local_correlations(eight_neighbours=True)
+pl.imshow(loc_corrs, cmap=pl.cm.gray, vmin=0.5, vmax=1)
+pl.imshow(mask_show > 0, alpha=.3, vmin=0)
+cb.matrixMontage(np.asarray(all_masksForPlot_tmp), cmap=pl.cm.gray)
+print 'Total elapsed time:' + str(time.time()-initTime)
 ```
 
 
 ## Installation
 
-###Prerequisites
+### Prerequisites
 
 LINUX
 
@@ -141,6 +145,7 @@ conda install -c menpo opencv3=3.1.0
 pip install tifffile
 conda install ipyparallel
 conda install scipy
+pip install tqdm
 ```
 
 MAC OS X
@@ -158,6 +163,7 @@ pip install tifffile
 conda install -c menpo opencv3=3.1.0
 conda install ipyparallel
 conda install scipy
+pip install tqdm
 ```
 
 
@@ -176,6 +182,7 @@ pip install tifffile
 conda install -c menpo opencv3=3.1.0
 conda install ipyparallel
 conda install scipy
+pip install tqdm
 ```
 if this does not work, you need to manually install opencv (pain in the neck)
 
@@ -187,7 +194,7 @@ http://opencv-python-tutroals.readthedocs.org/en/latest/py_tutorials/py_setup/py
 
 If you have problems installing opencv remember to match your architecture (32/64 bits) and to make sure that you have the required libraries installed
 
-### Install the package
+### Installation the package
 clone the git package
 ```
 git clone https://github.com/agiovann/CalBlitz.git
