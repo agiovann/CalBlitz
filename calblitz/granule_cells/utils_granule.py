@@ -23,7 +23,7 @@ from scipy import ndimage
 from scipy.optimize import linear_sum_assignment   
 from sklearn.utils.linear_assignment_ import linear_assignment    
 import re
-
+import pickle
 #%% Process triggers
 def extract_triggers(file_list,read_dictionaries=False): 
     
@@ -1211,10 +1211,13 @@ def process_fast_process_day(base_folders,save_name='temp_save.npz'):
                         pos_examples_chunks.append(ld['pos_examples'])                
                 else:
                     raise Exception('Names of triggers not matching!')
-        except:
+        except :
             print("ERROR in:"+base_folder)  
-            
-        if save_name is not None:
-            np.savez(save_name,triggers_chunk_fluo=triggers_chunk_fluo, triggers_chunk_bh=triggers_chunk_bh, eyelid_chunk=eyelid_chunk, wheel_chunk=wheel_chunk, tm_behav=tm_behav, fluo_chunk=fluo_chunk,names_chunks=names_chunks,pos_examples_chunks=pos_examples_chunks,A_chunks=A_chunks)            
-            
-        return triggers_chunk_fluo, eyelid_chunk,wheel_chunk ,triggers_chunk_bh ,tm_behav,names_chunks,fluo_chunk,pos_examples_chunks,A_chunks
+#            raise
+        
+    import pdb
+    pdb.set_trace()
+    if save_name is not None:
+        np.savez(save_name,triggers_chunk_fluo=triggers_chunk_fluo, triggers_chunk_bh=triggers_chunk_bh, eyelid_chunk=eyelid_chunk, wheel_chunk=wheel_chunk, tm_behav=tm_behav, fluo_chunk=fluo_chunk,names_chunks=names_chunks,pos_examples_chunks=pos_examples_chunks,A_chunks=A_chunks)            
+        
+    return triggers_chunk_fluo, eyelid_chunk,wheel_chunk ,triggers_chunk_bh ,tm_behav,names_chunks,fluo_chunk,pos_examples_chunks,A_chunks
