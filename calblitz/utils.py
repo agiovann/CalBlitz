@@ -199,7 +199,7 @@ def pre_preprocess_movie_labeling(dview, file_names, median_filter_size=(2,1,1),
    return file_res
     
 #%%
-def motion_correct_parallel(file_names,fr,template=None,margins_out=0,max_shift_w=5, max_shift_h=5,remove_blanks=False,apply_smooth=False,dview=None):
+def motion_correct_parallel(file_names,fr,template=None,margins_out=0,max_shift_w=5, max_shift_h=5,remove_blanks=False,apply_smooth=False,dview=None,save_hdf5=True):
     """motion correct many movies usingthe ipyparallel cluster
     Parameters
     ----------
@@ -215,8 +215,11 @@ def motion_correct_parallel(file_names,fr,template=None,margins_out=0,max_shift_
     base file names of the motion corrected files
     """
     args_in=[];
-    for f in file_names:
-        args_in.append((f,fr,margins_out,template,max_shift_w, max_shift_h,remove_blanks,apply_smooth))
+    for file_idx,f in enumerate(file_names):
+        if type(template) is list:
+            args_in.append((f,fr,margins_out,template[file_idx],max_shift_w, max_shift_h,remove_blanks,apply_smooth,save_hdf5))
+        else:
+            args_in.append((f,fr,margins_out,template,max_shift_w, max_shift_h,remove_blanks,apply_smooth,save_hdf5))
         
     try:
         
@@ -324,41 +327,47 @@ def process_movie_parallel(arg_in):
 
     
 
-    fname,fr,margins_out,template,max_shift_w, max_shift_h,remove_blanks,apply_smooth=arg_in
-    
-    with open(fname[:-4]+'.stout', "a") as log:
-        print fname
+    fname,fr,margins_out,template,max_shift_w, max_shift_h,remove_blanks,apply_smooth,save_hdf5=arg_in
+    if template is not None:
+        if type(template) is str:
+            if os.path.exists(template):
+                template=cb.load(template,fr=1)
+            else:
+                raise Exception('Path to template does not exist:'+template)                
+#    with open(fname[:-4]+'.stout', "a") as log:
+#        print fname
 #        sys.stdout = log
         
     #    import pdb
     #    pdb.set_trace()
-        Yr=cb.load(fname,fr=fr)
-        if Yr.ndim>1:
-            print 'loaded'    
-            if apply_smooth:
-                print 'applying smoothing'
-                Yr=Yr.bilateral_blur_2D(diameter=10,sigmaColor=10000,sigmaSpace=0)
-                
-            Yr=Yr-np.float32(np.percentile(Yr,1))     # needed to remove baseline
-            print 'Remove BL'
-            if margins_out!=0:
-                Yr=Yr[:,margins_out:-margins_out,margins_out:-margins_out] # borders create troubles
-            print 'motion correcting'
-            Yr,shifts,xcorrs,template=Yr.motion_correct(max_shift_w=max_shift_w, max_shift_h=max_shift_h,  method='opencv',template=template,remove_blanks=remove_blanks) 
-            print 'median computing'        
-            template=Yr.bin_median()
-            print 'saving'  
-            idx_dot=len(fname.split('.')[-1])
+    Yr=cb.load(fname,fr=fr)
+    if Yr.ndim>1:
+        print 'loaded'    
+        if apply_smooth:
+            print 'applying smoothing'
+            Yr=Yr.bilateral_blur_2D(diameter=10,sigmaColor=10000,sigmaSpace=0)
+            
+        Yr=Yr-np.float32(np.percentile(Yr,1))     # needed to remove baseline
+        print 'Remove BL'
+        if margins_out!=0:
+            Yr=Yr[:,margins_out:-margins_out,margins_out:-margins_out] # borders create troubles
+        print 'motion correcting'
+        Yr,shifts,xcorrs,template=Yr.motion_correct(max_shift_w=max_shift_w, max_shift_h=max_shift_h,  method='opencv',template=template,remove_blanks=remove_blanks) 
+        print 'median computing'        
+        template=Yr.bin_median()
+        print 'saving'  
+        idx_dot=len(fname.split('.')[-1])
+        if save_hdf5:
             Yr.save(fname[:-idx_dot]+'hdf5')        
-            print 'saving 2'                 
-            np.savez(fname[:-idx_dot]+'npz',shifts=shifts,xcorrs=xcorrs,template=template)
-            print 'deleting'        
-            del Yr
-            print 'done!'
-            return fname[:-idx_dot] 
-            #sys.stdout = sys.__stdout__ 
-        else:
-            return None
+        print 'saving 2'                 
+        np.savez(fname[:-idx_dot]+'npz',shifts=shifts,xcorrs=xcorrs,template=template)
+        print 'deleting'        
+        del Yr
+        print 'done!'
+        return fname[:-idx_dot] 
+        #sys.stdout = sys.__stdout__ 
+    else:
+        return None
            
 #%% 
 def val_parse(v):
