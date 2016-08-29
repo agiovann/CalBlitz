@@ -26,7 +26,7 @@ from matplotlib import animation
 import pylab as pl
 from skimage.external.tifffile import imread
 from tqdm import tqdm
-
+import timeseries
 # from ca_source_extraction.utilities import save_memmap,load_memmap
 
 try:
@@ -753,24 +753,43 @@ class movie(ts.timeseries):
 
 
         """
-        if fx!=1 or fy!=1:
-            print "reshaping along x and y"
-            t,h,w=self.shape
-            newshape=(int(w*fy),int(h*fx))
-            mov=[];
-            print(newshape)
-            for frame in self:
-                mov.append(cv2.resize(frame,newshape,fx=fx,fy=fy,interpolation=interpolation))
-            self=movie(np.asarray(mov),**self.__dict__)
-        if fz!=1:
-            print "reshaping along z"
-            t,h,w=self.shape
-            self=np.reshape(self,(t,h*w))
-            mov=cv2.resize(self,(h*w,int(fz*t)),fx=1,fy=fz,interpolation=interpolation)
-#            self=cv2.resize(self,(h*w,int(fz*t)),fx=1,fy=fz,interpolation=interpolation)
-            mov=np.reshape(mov,(int(fz*t),h,w))
-            self=movie(mov,**self.__dict__)
-            self.fr=self.fr*fz
+        T,d1,d2 =self.shape
+        d=d1*d2
+        elm=d*T
+        max_els=2**31-1
+        if elm > max_els:
+            chunk_size=(max_els)/d   
+            new_m=[]
+            print('Resizing in chunks because of opencv bug')
+            for chunk in range(0,T,chunk_size):
+                print([chunk,np.minimum(chunk+chunk_size,T)])                
+                m_tmp=self[chunk:np.minimum(chunk+chunk_size,T)].copy()
+                m_tmp=m_tmp.resize(fx=fx,fy=fy,fz=fz,interpolation=interpolation)
+                if len(new_m) == 0:
+                    new_m=m_tmp
+                else:
+                    new_m=timeseries.concatenate([new_m,m_tmp],axis=0)
+                
+            return new_m
+        else:
+            if fx!=1 or fy!=1:
+                print "reshaping along x and y"
+                t,h,w=self.shape
+                newshape=(int(w*fy),int(h*fx))
+                mov=[];
+                print(newshape)
+                for frame in self:
+                    mov.append(cv2.resize(frame,newshape,fx=fx,fy=fy,interpolation=interpolation))
+                self=movie(np.asarray(mov),**self.__dict__)
+            if fz!=1:
+                print "reshaping along z"
+                t,h,w=self.shape
+                self=np.reshape(self,(t,h*w))
+                mov=cv2.resize(self,(h*w,int(fz*t)),fx=1,fy=fz,interpolation=interpolation)
+    #            self=cv2.resize(self,(h*w,int(fz*t)),fx=1,fy=fz,interpolation=interpolation)
+                mov=np.reshape(mov,(np.maximum(1,int(fz*t)),h,w))
+                self=movie(mov,**self.__dict__)
+                self.fr=self.fr*fz
 
         return self
 
@@ -1113,7 +1132,7 @@ def load(file_name,fr=None,start_time=0,meta_data=None,subindices=None,shape=Non
             filename=os.path.split(file_name)[-1]
             fpart=filename.split('_')[1:-1]
             d1,d2,d3,T,order=int(fpart[-9]),int(fpart[-7]),int(fpart[-5]),int(fpart[-1]),fpart[-3]
-            Yr=np.memmap(filename,mode='r',shape=(d1*d2,T),dtype=np.float32,order=order)
+            Yr=np.memmap(file_name,mode='r',shape=(d1*d2,T),dtype=np.float32,order=order)
             print 'mmap'
 
             return movie(to_3D(np.array(Yr).T,(T,d1,d2),order=order),fr=fr)
