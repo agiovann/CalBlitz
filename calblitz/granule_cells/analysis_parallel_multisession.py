@@ -187,8 +187,9 @@ with np.load('eyeblink_35_37.npz')  as ld:
           locals().update(ld)     
        
 #%%
-thresh_middle=.2
-thresh_late=.8
+thresh_middle=.05
+thresh_advanced=.35
+thresh_late=.9
 time_CR_on=-.1
 time_US_on=.05
 thresh_MOV_iqr=100
@@ -200,7 +201,7 @@ time_bef=2.7
 time_aft=4.5
 f_rate_fluo=1/30.0
 ISI=.25
-min_trials=4
+min_trials=8
 cr_ampl=pd.DataFrame()
 mouse_now=''
 session_now=''
@@ -339,8 +340,11 @@ for tr_fl,tr_bh,eye,whe,tm,fl,nm,pos_examples,A in zip(triggers_chunk_fluo, trig
     if  len(nm_idxCR)*1./len(nm_idxCSCSUS)> thresh_middle and learning_phase==0:
         learning_phase=1
         print 'middle'
-    elif len(nm_idxCR)*1./len(nm_idxCSCSUS)> thresh_late and learning_phase==1:
+    elif len(nm_idxCR)*1./len(nm_idxCSCSUS)> thresh_advanced and learning_phase==1:
         learning_phase=2
+        print 'advanced'
+    elif len(nm_idxCR)*1./len(nm_idxCSCSUS)> thresh_late and learning_phase==2:
+        learning_phase=3
         print 'late'
     ampl_CR['learning_phase']= learning_phase          
     ampl_CR['ampl_eyelid_CSCSUS']=np.mean(amplitudes_at_US[nm_idxCSCSUS])
@@ -404,7 +408,7 @@ mat_summaries=['/mnt/xfs1/home/agiovann/imaging/eyeblink/MAT_SUMMARIES/gc-AGGC6f
 '/mnt/xfs1/home/agiovann/imaging/eyeblink/MAT_SUMMARIES/AG052014-01/python_out.mat',
 '/mnt/xfs1/home/agiovann/imaging/eyeblink/MAT_SUMMARIES/AG051514-01/python_out.mat']
 for mat_summary in mat_summaries:
-    ld=scipy.io.loadmat('/mnt/xfs1/home/agiovann/python_out.mat')
+    ld=scipy.io.loadmat(mat_summary)
     cr_ampl_dic=dict()
     cr_ampl_dic['trials']=np.array([a[0][0][0] for a in ld['python_trials']])
     cr_ampl_dic['trialsTypeOrig']=[css[0][0] for css in ld['python_trialsTypeOrig']]
@@ -472,8 +476,11 @@ for mat_summary in mat_summaries:
         if  len(idx_CR)*1./(len(idx_NOCR)+len(idx_CR))> thresh_middle and learning_phase==0:
             learning_phase=1
             print 'middle'
-        elif len(idx_CR)*1./(len(idx_NOCR)+len(idx_CR))> thresh_late and learning_phase==1:
+        elif len(idx_CR)*1./(len(idx_NOCR)+len(idx_CR))> thresh_advanced and learning_phase==1:
             learning_phase=2
+            print 'advanced'
+        elif len(idx_CR)*1./(len(idx_NOCR)+len(idx_CR))> thresh_late and learning_phase==3:
+            learning_phase=3
             print 'late'
         ampl_CR['learning_phase']= learning_phase          
         ampl_CR['ampl_eyelid_CSCSUS']=np.mean(mat_ampl_at_US[np.union1d(idx_NOCR,idx_CR)])
@@ -574,32 +581,80 @@ grouped_session.mean().loc['b37'][['ampl_eyelid_CR','perc_CR']].plot(kind='line'
 #pl.ylim([0,.5])
 pl.rc('font', **font)
 #%%
-pl.subplot(2,1,1)
 grouped_session=cr_ampl.groupby(['learning_phase'])    
 sems=grouped_session.sem()[['fluo_plus','fluo_minus']]
 grouped_session.median()[['fluo_plus','fluo_minus']].plot(kind='line',yerr=sems,marker='o',markersize=15,xticks=range(len(grouped_session.mean())))
 pl.rc('font', **font)
-pl.xticks(np.arange(3),['Naive','Learning','Trained'])
+pl.xticks(np.arange(4),['Naive','Learning','Advanced','Trained'])
 pl.xlabel('Learning Phase')
 pl.ylabel('DF/F')
-pl.xlim([-.1 ,2.1])
+pl.legend(['CR+','CR-'],loc=0)
+pl.xlim([-.1 ,3.1])
 #%%
-pl.subplot(2,1,2)
 cr_ampl_m=cr_ampl#[cr_ampl['mouse']=='b37']
-bins=[0,.2, .5, 1]
+bins=[0, .05,  .35, .9, 1]
 grouped_session=cr_ampl_m.groupby(pd.cut(cr_ampl_m['perc_CR'],bins,include_lowest=True)) 
-means=grouped_session.median()[['fluo_plus','fluo_minus']]
+means=grouped_session.mean()[['fluo_plus','fluo_minus']]
 sems=grouped_session.sem()[['fluo_plus','fluo_minus']]
-means.plot(kind='line',yerr=sems,marker='o',xticks=range(3),markersize=15)
-pl.xlim([-.1, 2.1])
-pl.legend(['CR+','CR-'],loc=3)
+means.plot(kind='line',yerr=sems,marker='o',xticks=range(6),markersize=15)
+pl.xlim([-.1, 5.1])
+pl.legend(['CR+','CR-'],loc=4)
 pl.xlabel('Fraction of CRs')
 pl.ylabel('DF/F')
 
 pl.rc('font', **font)
 #%%
-grouped_session=cr_ampl.groupby(['session','chunk'])    
-print grouped_session.count().mean().idx_component, grouped_session.count().std().idx_component
+cr_ampl_m=cr_ampl#[cr_ampl['mouse']=='b37']
+bins=[0,.1, .5, 1]
+grouped_session=cr_ampl_m.groupby(pd.cut(cr_ampl_m['perc_CR'],bins,include_lowest=True)) 
+means=grouped_session.mean()[['fluo_plus','fluo_minus']]
+sems=grouped_session.sem()[['fluo_plus','fluo_minus']]
+means.plot(kind='bar',yerr=sems,xticks=range(3))
+pl.xlim([-.5, 2.5])
+pl.legend(['CR+','CR-'],loc=4)
+pl.xlabel('Fraction of CRs')
+pl.ylabel('DF/F')
+
+pl.rc('font', **font)
+#%%
+from itertools import cycle, islice
+grouped_session=cr_ampl_m.groupby(['mouse',pd.cut(cr_ampl_m['perc_CR'],bins,include_lowest=True),pd.cut(cr_ampl_m['fluo_plus'],[0,.2,.8,1.5],include_lowest=True)]) 
+pl.close('all')
+
+for counter,ms in enumerate(cr_ampl_m.mouse.unique()):
+    cr_now=cr_ampl_m[cr_ampl_m.mouse==ms]
+    if 'gc' in ms or 'b3' in ms:
+        cr_now=cr_now[cr_now.session_id>=np.maximum(0,cr_now.session_id.max()-3)]
+    else:
+        if ms == 'AG052014-01':
+            print '*'
+            cr_now=cr_now[cr_now.session_id==np.maximum(0,cr_now.session_id.max()-3)]
+        else:
+            cr_now=cr_now[cr_now.session_id==np.maximum(0,cr_now.session_id.max())]    
+    cr_now['delta']=(cr_now['fluo_plus']-cr_now['fluo_minus'])  
+    cr_now['delta_norm']=(cr_now['fluo_plus']-cr_now['fluo_minus'])/np.abs(cr_now['fluo_plus']+cr_now['fluo_minus'])          
+    cr_now['fluo_minus']=-cr_now['fluo_minus']
+    cr_now=cr_now[cr_now.fluo_minus<=0]
+    cr_now=cr_now[cr_now.delta_norm>0]
+    ax=pl.subplot(1,6,counter+1)
+    cr_now=cr_now.sort('delta')
+    my_colors = list(islice(cycle(['k', 'r']), None, len(cr_now)))
+    cr_now[['delta','fluo_minus']].dropna(0)[-61:-1].plot(ax=ax,kind='bar',stacked=True,color=my_colors,width=.9,edgecolor='none')
+    pl.tick_params(
+        axis='x',          # changes apply to the x-axis
+        which='both',      # both major and minor ticks are affected
+        bottom='off',      # ticks along the bottom edge are off
+        top='off',         # ticks along the top edge are off
+        labelbottom='off') # labels along the bottom edge are off
+    ax.legend().remove()
+    pl.ylabel('DF/F')
+    pl.ylim([-1.4,1.4])
+#    cr_now[['fluo_plus','fluo_minus']].dropna(0).sort('fluo_plus')[-61:-1].plot(kind='bar',stacked=True,color=my_colors,width=.9)
+    pl.title(ms)
+    pl.xlabel('Granule cells')
+
+
+pl.legend(['CR+-CR-','CR-'])
 #%%
 bins=[0,.1, .5, 1]
 grouped_session=cr_ampl.groupby([pd.cut(cr_ampl_m['ampl_eyelid_CSCSUS'],bins,include_lowest=True)])    
