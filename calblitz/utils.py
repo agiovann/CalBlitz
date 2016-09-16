@@ -328,6 +328,7 @@ def process_movie_parallel(arg_in):
     
 
     fname,fr,margins_out,template,max_shift_w, max_shift_h,remove_blanks,apply_smooth,save_hdf5=arg_in
+    
     if template is not None:
         if type(template) is str:
             if os.path.exists(template):
@@ -340,31 +341,70 @@ def process_movie_parallel(arg_in):
         
     #    import pdb
     #    pdb.set_trace()
-    Yr=cb.load(fname,fr=fr)
+    
+    if type(fname) is cb.movie:
+        
+        Yr=fname
+
+    else:        
+
+        Yr=cb.load(fname,fr=fr)
+        
     if Yr.ndim>1:
+
         print 'loaded'    
+
         if apply_smooth:
+
             print 'applying smoothing'
+
             Yr=Yr.bilateral_blur_2D(diameter=10,sigmaColor=10000,sigmaSpace=0)
-            
-        Yr=Yr-np.float32(np.percentile(Yr,1))     # needed to remove baseline
+
+#        bl_yr=np.float32(np.percentile(Yr,8))    
+
+ #       Yr=Yr-bl_yr     # needed to remove baseline
+
         print 'Remove BL'
+
         if margins_out!=0:
+
             Yr=Yr[:,margins_out:-margins_out,margins_out:-margins_out] # borders create troubles
+
         print 'motion correcting'
+
         Yr,shifts,xcorrs,template=Yr.motion_correct(max_shift_w=max_shift_w, max_shift_h=max_shift_h,  method='opencv',template=template,remove_blanks=remove_blanks) 
-        print 'median computing'        
-        template=Yr.bin_median()
-        print 'saving'  
-        idx_dot=len(fname.split('.')[-1])
-        if save_hdf5:
-            Yr.save(fname[:-idx_dot]+'hdf5')        
-        print 'saving 2'                 
-        np.savez(fname[:-idx_dot]+'npz',shifts=shifts,xcorrs=xcorrs,template=template)
-        print 'deleting'        
-        del Yr
-        print 'done!'
-        return fname[:-idx_dot] 
+
+  #      Yr = Yr + bl_yr           
+        
+        if type(fname) is cb.movie:
+
+            return Yr 
+
+        else:     
+            
+            print 'median computing'        
+
+            template=Yr.bin_median()
+
+            print 'saving'  
+
+            idx_dot=len(fname.split('.')[-1])
+
+            if save_hdf5:
+
+                Yr.save(fname[:-idx_dot]+'hdf5')        
+
+            print 'saving 2'                 
+
+            np.savez(fname[:-idx_dot]+'npz',shifts=shifts,xcorrs=xcorrs,template=template)
+
+            print 'deleting'        
+
+            del Yr
+
+            print 'done!'
+        
+            return fname[:-idx_dot] 
         #sys.stdout = sys.__stdout__ 
     else:
         return None

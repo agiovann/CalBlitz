@@ -116,9 +116,13 @@ class movie(ts.timeseries):
         '''
 
         # adjust the movie so that valuse are non negative
-
-        min_val = np.min(np.mean(self, axis=0))
-        self = self-min_val
+        
+#        min_val = np.percentile(self, 8)
+#        if min_val>0:
+#            print "removing 8 percentile"
+#            self = self-min_val
+#        else:
+#            min_val=0
 
         if template is None:  # if template is not provided it is created
             if num_frames_template is None:
@@ -141,11 +145,12 @@ class movie(ts.timeseries):
             m=m.apply_shifts(shifts,interpolation='cubic',method=method)
             template=(m.bin_median())
             del m
-
+        else:
+            template=template-np.percentile(template,8)
         # now use the good template to correct
         shifts,xcorrs=self.extract_shifts(max_shift_w=max_shift_w, max_shift_h=max_shift_h, template=template, method=method)  #
         self=self.apply_shifts(shifts,interpolation='cubic',method=method)
-        self=self+min_val
+#        self=self+min_val
 
         if remove_blanks:
             max_h,max_w= np.max(shifts,axis=0)
@@ -178,11 +183,14 @@ class movie(ts.timeseries):
         shifts : tuple, contains shifts in x and y and correlation with template
         xcorrs: cross correlation of the movies with the template
         """
-
-        if np.min(np.mean(self, axis=0)) < 0:
-            warnings.warn('Pixels averages are too negative. \
-                           Algorithm might not work.')
-
+        min_val=np.percentile(self, 1)
+        if min_val < - 0.1:
+            print min_val
+            warnings.warn('** Pixels averages are too negative. Removing 1 percentile. **')
+            self=self-min_val 
+        else:
+            min_val=0                          
+            
         if type(self[0, 0, 0]) is not np.float32:
             warnings.warn('Casting the array to float 32')
             self = np.asanyarray(self, dtype=np.float32)
@@ -194,6 +202,10 @@ class movie(ts.timeseries):
 
         if template is None:
             template = np.median(self, axis=0)
+        else:
+            if np.percentile(template, 8) < - 0.1:
+                warnings.warn('Pixels averages are too negative for template. Removing 1 percentile.')
+                template=template-np.percentile(template,1)
 
         template=template[ms_h:h_i-ms_h,ms_w:w_i-ms_w].astype(np.float32)
         h, w = template.shape      # template width and height
@@ -251,7 +263,9 @@ class movie(ts.timeseries):
              shifts.append([sh_x_n,sh_y_n])
              xcorrs.append([avg_corr])
 
-
+        
+        self=self+min_val
+            
         return (shifts,xcorrs)
 
 
