@@ -206,6 +206,7 @@ cr_ampl=pd.DataFrame()
 mouse_now=''
 session_now=''
 session_id = 0
+#%%
 idx_sorted=names_chunks.argsort()
 names_chunks=names_chunks[idx_sorted]
 
@@ -251,6 +252,7 @@ for tr_fl,tr_bh,eye,whe,tm,fl,nm,pos_examples,A in zip(triggers_chunk_fluo, trig
     idxCR = trig_CRs['idxCR']
     idxUS = trig_CRs['idxUS']
     idxCSCSUS=np.concatenate([idx_CS,idx_CS_US]) 
+    
     
     
     wheel_traces, movement_at_CS, trigs_mov = process_wheel_traces(np.array(whe),tm,thresh_MOV_iqr=thresh_MOV_iqr,time_CS_on=time_CS_on_MOV,time_US_on=time_US_on_MOV)    
@@ -403,9 +405,11 @@ for tr_fl,tr_bh,eye,whe,tm,fl,nm,pos_examples,A in zip(triggers_chunk_fluo, trig
 #    pl.plot(time_fl,np.nanmedian(f_mat_bl[nm_idxCR,:,:][:,idx_components_final,:],(0,1)),'b')
 #    pl.plot(time_fl,np.nanmedian(f_mat_bl[nm_idxNOCR,:,:][:,idx_components_final,:],(0,1)),'g')
 #%%
-mat_summaries=['/mnt/xfs1/home/agiovann/imaging/eyeblink/MAT_SUMMARIES/gc-AGGC6f-031213-03/python_out.mat',
-'/mnt/xfs1/home/agiovann/imaging/eyeblink/MAT_SUMMARIES/gc-AG052014-02/python_out.mat',
-'/mnt/xfs1/home/agiovann/imaging/eyeblink/MAT_SUMMARIES/AG052014-01/python_out.mat',
+thresh_mov=2
+mat_summaries=[
+#'/mnt/xfs1/home/agiovann/imaging/eyeblink/MAT_SUMMARIES/gc-AGGC6f-031213-03/python_out.mat',
+#'/mnt/xfs1/home/agiovann/imaging/eyeblink/MAT_SUMMARIES/gc-AG052014-02/python_out.mat',
+#'/mnt/xfs1/home/agiovann/imaging/eyeblink/MAT_SUMMARIES/AG052014-01/python_out.mat',
 '/mnt/xfs1/home/agiovann/imaging/eyeblink/MAT_SUMMARIES/AG051514-01/python_out.mat']
 for mat_summary in mat_summaries:
     ld=scipy.io.loadmat(mat_summary)
@@ -417,15 +421,30 @@ for mat_summary in mat_summaries:
     cr_ampl_dic['animal']=[css[0][0] for css in ld['python_animal']]
     cr_ampl_dic['day']=[css[0][0] for css in ld['python_day']]
     cr_ampl_dic['realDay']=[css[0][0] for css in ld['python_realDay']]
+    cr_ampl_dic['trials_talmo']=[css[0][0] for css in ld['python_trials_talmo']]
+    cr_ampl_dic['nose_talmo']=[css[0][0] for css in ld['python_nose_talmo']]
+    cr_ampl_dic['timestamps_talmo']=[css[0][0] for css in ld['python_timestamps_talmo']]
+    cr_ampl_dic['exptNames_talmo']=[css[0][0] for css in ld['python_exptNames_talmo']]
     
     mat_time=np.array([css[0] for css in ld['python_time']])
     mat_wheel=np.array([css for css in ld['python_wheel']])
     mat_eyelid=np.array([css for css in ld['python_eyelid']])
+    mat_nose_talmo=np.array([css for css in ld['python_nose_vel_talmo']])    
+    mat_wheel_talmo=np.array([css for css in ld['python_wheel_cms_talmo']])
+    mat_wheel_talmo=np.abs(mat_wheel_talmo)
+    
     mat_ampl_at_US=np.nanmedian(mat_eyelid[np.logical_and(mat_time > -.05,mat_time < time_US_on) ,:],0)
+    wheel_ampl_while_CS=np.nanmax(mat_wheel_talmo[np.logical_and(mat_time > -ISI,mat_time < time_US_on) ,:],0)
+    
+    
     mat_fluo=np.concatenate([np.atleast_3d(css) for css in ld['python_fluo_traces']],-1)
     mat_idxCR=np.where([np.logical_and(t in ['CSUS','CS'],ampl>=thresh_CR) for t,ampl in zip(cr_ampl_dic['trialsTypeOrig'],mat_ampl_at_US)])[0]
     mat_idxNOCR=np.where([np.logical_and(t in ['CSUS','CS'],ampl<thresh_CR) for t,ampl in zip(cr_ampl_dic['trialsTypeOrig'],mat_ampl_at_US)])[0]
     
+    idx_no_mov=np.where(wheel_ampl_while_CS<=thresh_mov)[0]
+    
+    mat_idxCR=np.intersect1d(mat_idxCR,idx_no_mov)
+    mat_idxNOCR=np.intersect1d(mat_idxNOCR,idx_no_mov)
     
     mouse_now=''
     session_now=''
@@ -487,7 +506,7 @@ for mat_summary in mat_summaries:
         ampl_CR['session_id']=session_id
         cr_ampl=pd.concat([cr_ampl,ampl_CR])        
     
-    
+#%%    
 #print mat_idxCR.size
 #amplitudes_responses=np.nanmedian(mat_fluo[:,:,np.logical_and(mat_time > -.05,mat_time < time_US_on)],(-1))
 #
