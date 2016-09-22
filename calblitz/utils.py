@@ -342,12 +342,12 @@ def process_movie_parallel(arg_in):
     #    import pdb
     #    pdb.set_trace()
     
-    if type(fname) is cb.movie:
-        
+    if type(fname) is cb.movie or type(fname) is cb.movies.movie:
+        print type(fname)
         Yr=fname
 
     else:        
-
+        
         Yr=cb.load(fname,fr=fr)
         
     if Yr.ndim>1:

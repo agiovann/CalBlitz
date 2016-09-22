@@ -172,7 +172,7 @@ class timeseries(np.ndarray):
                 dset=f.create_dataset("mov",data=np.asarray(self))
                 dset.attrs["fr"]=self.fr
                 dset.attrs["start_time"]=self.start_time
-                dset.attrs["file_name"]=self.file_name
+                dset.attrs["file_name"]=[a.encode('utf8') for a in self.file_name] 
                 dset.attrs["meta_data"]=cpk.dumps(self.meta_data)
 
         else:

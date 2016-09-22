@@ -1135,7 +1135,10 @@ def load(file_name,fr=None,start_time=0,meta_data=None,subindices=None,shape=Non
         elif extension== '.hdf5':
             with h5py.File(file_name, "r") as f:
                 attrs=dict(f['mov'].attrs)
-                attrs['meta_data']=cpk.loads(attrs['meta_data'])
+                #print attrs
+                if meta_data in attrs:
+                    attrs['meta_data']=cpk.loads(attrs['meta_data'])
+                
                 if subindices is None:
 #                    fr=f['fr'],start_time=f['start_time'],file_name=f['file_name']
                     return movie(f['mov'],**attrs)
