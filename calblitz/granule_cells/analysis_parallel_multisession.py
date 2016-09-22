@@ -184,7 +184,8 @@ triggers_chunk_fluo, eyelid_chunk,wheel_chunk ,triggers_chunk_bh ,tm_behav,names
      
 #%%
 with np.load('eyeblink_35_37.npz')  as ld:
-          locals().update(ld)     
+    print (ld.keys())
+    locals().update(ld)     
        
 #%%
 thresh_middle=.05
@@ -209,7 +210,16 @@ session_id = 0
 #%%
 idx_sorted=names_chunks.argsort()
 names_chunks=names_chunks[idx_sorted]
-
+#%%
+names_trials=[]
+last_dir=''
+for nms in names_chunks:
+    new_dir = os.path.dirname(nms)
+    if last_dir != new_dir:
+        print new_dir
+        last_dir = new_dir
+        templ_file=glob.glob(os.path.join())
+#%%
 triggers_chunk_fluo=  triggers_chunk_fluo[idx_sorted]
 triggers_chunk_bh=  triggers_chunk_bh[idx_sorted]
 eyelid_chunk=  eyelid_chunk[idx_sorted] 
