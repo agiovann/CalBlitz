@@ -319,7 +319,6 @@ def mode_robust(inputData, axis=None, dtype=None):
 def process_movie_parallel(arg_in):
 #    import calblitz
 #    import calblitz.movies
-    import ca_source_extraction as cse
     import calblitz as cb
     import numpy as np
     import sys
