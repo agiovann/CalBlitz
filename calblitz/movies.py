@@ -980,7 +980,7 @@ class movie(ts.timeseries):
 
                     cv2.imshow('frame',(offset+frame)*gain/maxmov)
                     if cv2.waitKey(int(1./fr*1000)) & 0xFF == ord('q'):
-                        cv2.destroyAllWindows()
+#                        cv2.destroyAllWindows()
                         looping=False
                         terminated=True
                         break
@@ -1015,11 +1015,14 @@ class movie(ts.timeseries):
 
 
          if backend is 'opencv':
+            cv2.waitKey(100)
             cv2.destroyAllWindows()
+            for i in range(10):
+                cv2.waitKey(100)
+            
 
 
-
-def load(file_name,fr=None,start_time=0,meta_data=None,subindices=None,shape=None):
+def load(file_name,fr=None,start_time=0,meta_data=None,subindices=None,shape=None,num_frames_sub_idx=np.inf):
     '''
     load movie from file.
 
@@ -1153,12 +1156,20 @@ def load(file_name,fr=None,start_time=0,meta_data=None,subindices=None,shape=Non
             print 'mmap'
 
             return movie(to_3D(np.array(Yr).T,(T,d1,d2),order=order),fr=fr)
+            
+        elif extension == '.sbx':
+
+            print 'sbx'
+            
+            return movie(sbxread(file_name[:-4],num_frames_sub_idx).transpose([0,3,2,1]),fr=fr)
+            
+            
         else:
             raise Exception('Unknown file type')
     else:
         raise Exception('File not found!')
 
-    return movie(input_arr,fr=fr,start_time=start_time,file_name=file_name, meta_data=meta_data)
+    return movie(input_arr,fr=fr,start_time=start_time,file_name=os.path.split(file_name)[-1], meta_data=meta_data)
 
 
 def load_movie_chain(file_list, fr=None, start_time=0,
@@ -1180,6 +1191,85 @@ def load_movie_chain(file_list, fr=None, start_time=0,
         mov.append(m)
     return ts.concatenate(mov, axis=0)
 
+
+def loadmat_sbx(filename):
+     '''
+     this function should be called instead of direct spio.loadmat
+     as it cures the problem of not properly recovering python dictionaries
+     from mat files. It calls the function check keys to cure all entries
+     which are still mat-objects
+     '''
+     data_ = loadmat(filename, struct_as_record=False, squeeze_me=True)
+     return _check_keys(data_)
+ 
+def _check_keys(dict):
+     '''
+     checks if entries in dictionary are mat-objects. If yes
+     todict is called to change them to nested dictionaries
+     '''
+     
+     for key in dict:
+       if isinstance(dict[key], scipy.io.matlab.mio5_params.mat_struct):
+         dict[key] = _todict(dict[key])
+         
+     return dict
+ 
+def _todict(matobj):
+     '''
+     A recursive function which constructs from matobjects nested dictionaries
+     '''
+      
+     dict = {}
+     for strg in matobj._fieldnames:
+       elem = matobj.__dict__[strg]
+       if isinstance(elem, scipy.io.matlab.mio5_params.mat_struct):
+         dict[strg] = _todict(elem)
+       else:
+         dict[strg] = elem
+     return dict
+ 
+def sbxread(filename,n_frames=np.inf):
+     '''
+     Input: filename should be full path excluding .sbx
+     '''
+     # Check if contains .sbx and if so just truncate
+     if '.sbx' in filename:
+       filename = filename[:-4]
+     
+     # Load info
+     info = loadmat_sbx(filename + '.mat')['info']
+     #print info.keys()
+     
+     # Defining number of channels/size factor
+     if info['channels'] == 1:
+       info['nChan'] = 2; factor = 1
+     elif info['channels'] == 2:
+       info['nChan'] = 1; factor = 2
+     elif info['channels'] == 3:
+       info['nChan'] = 1; factor = 2
+      
+     # Determine number of frames in whole file
+     max_idx = os.path.getsize(filename + '.sbx')/info['recordsPerBuffer']/info['sz'][1]*factor/4-1
+     
+     # Paramters
+     k = 0; #First frame
+     N = max_idx; #Last frame
+     
+     N = np.minimum(max_idx,n_frames)
+     
+     
+     nSamples = info['sz'][1] * info['recordsPerBuffer'] * 2 * info['nChan']
+              
+     # Open File
+     fo = open(filename + '.sbx')
+      
+     # Note: There is a weird inversion that happns thus I am dding the negative sign....
+     fo.seek(k*nSamples, 0)
+     x = np.fromfile(fo, dtype = 'uint16',count = nSamples/2*N)
+     
+     x = -x.reshape((info['nChan'], info['sz'][1], info['recordsPerBuffer'], N), order = 'F')
+     
+     return x
 
 def to_3D(mov2D,shape,order='F'):
     """
