@@ -12,7 +12,8 @@ Updated on Wed Aug 17 13:51:41 2016
 import calblitz as cb
 import pylab as pl
 import numpy as np
-
+import glob
+from time import time
 # set basic ipython functionalities
 from IPython import get_ipython
 ipython = get_ipython()
@@ -22,47 +23,39 @@ if '__IPYTHON__' in globals():
     ipython.magic('autoreload 2')
 #%%
 # define movie
-filename = 'your_movie.tif'
-filename_hdf5 = filename[:-4]+'.hdf5'
-filename_mc = filename[:-4]+'_mc.npz'
-frameRate = 30
-start_time = 0
-
-# load movie
-# for loading only a portion of the movie or only some channels
-# you can use the option: subindices=range(0,1500,10)
-m = cb.load(filename, fr=frameRate, start_time=start_time)
-print m.shape
-# red and green channels
-m_r=m[:,:,:,0] # red
-m=m[:,:,:,1] # green
-
-# this syntax depends on how you organized red and green channels it could also be
-#m_r=m[1::2,:,:]
-#m=m[0::2,:,:,:]
-# or other. Look at m.shape
-
-
-# backend='opencv' is much faster
-cb.concatenate([m,m_r],axis=1).resize(.5,.5,.1).play(fr=100, gain=1.0, magnification=1,backend='opencv')
-
-
-# automatic parameters motion correction
-max_shift_h = 20  # maximum allowed shifts in y
-max_shift_w = 20  # maximum allowed shifts in x
-m_r_mc, shifts, xcorrs, template = m_r.motion_correct(max_shift_w=max_shift_w,
-                                               max_shift_h=max_shift_h,
-                                               num_frames_template=None,
-                                               template=None, remove_blanks=False,
-                                               method='opencv')
+def separate_channels(filename):    
+    filename_red = filename[:-4]+'_red.hdf5'
+    filename_green = filename[:-4]+'_green.hdf5'
+    frameRate=30
+    
+    # load movie
+    # for loading only a portion of the movie or only some channels
+    # you can use the option: subindices=range(0,1500,10)
+    m = cb.load(filename, fr=frameRate, subindices=slice(1,None,2))
+    print m.shape
+    m.save(filename_red)
+    m = cb.load(filename, fr=frameRate, subindices=slice(0,None,2))
+    m.save(filename_green)
+    return((filename_green,filename_red))
 #%%
-pl.figure()
-pl.imshow(template,cmap='gray')
-pl.figure()
-pl.plot(shifts)
-
-#%% apply the shifts to the green channel
-m_mc=m.apply_shifts(shifts, interpolation='linear', method='opencv', remove_blanks=True)
+file_names=glob.glob('*.tif')    
+file_names.sort()
+print file_names
 #%%
-m_mc.resize(.5,.5,.1).play(fr=30, gain=1.0, magnification=1)
+res=map(separate_channels,file_names)
+#%%
+greens=[a for a,b in res]
+#%%
+file_res=cb.motion_correct_parallel(greens,fr=30,template=None,margins_out=0,max_shift_w=45, max_shift_h=45,dview=None,apply_smooth=True,save_hdf5=True)
 
+#%% run a second time since it gives better results
+
+file_res=cb.motion_correct_parallel(greens,fr=30,template=None,margins_out=0,max_shift_w=25, max_shift_h=25,dview=None,apply_smooth=True,save_hdf5=True)
+
+#%%
+m=cb.load(file_res[2]+'hdf5',fr=30)
+m.resize(1,1,.2).play(backend='opencv',gain=3.,fr=100)
+#%%
+for f in file_res:
+    m=cb.load(f+'hdf5',fr=30)
+    m.save(f[:-1]+'_mc.tif')

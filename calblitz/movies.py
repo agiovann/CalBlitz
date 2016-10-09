@@ -397,7 +397,7 @@ class movie(ts.timeseries):
         return self[crop_begin:t-crop_end,crop_top:h-crop_bottom,crop_left:w-crop_right]
 
 
-    def computeDFF(self,secsWindow=5,quantilMin=8,method='only_baseline'):
+    def computeDFF(self,secsWindow=5,quantilMin=8,method='only_baseline',order='C'):
         """
         compute the DFF of the movie or remove baseline
         In order to compute the baseline frames are binned according to the window length parameter
@@ -432,7 +432,9 @@ class movie(ts.timeseries):
 
         #% compute baseline quickly
         print "binning data ..."; sys.stdout.flush()
-        movBL=np.reshape(self,(downsampfact,int(numFramesNew/downsampfact),linePerFrame,pixPerLine));
+#        import pdb
+#        pdb.set_trace()
+        movBL=np.reshape(self,(downsampfact,int(numFramesNew/downsampfact),linePerFrame,pixPerLine),order=order);
         movBL=np.percentile(movBL,quantilMin,axis=0);
         print "interpolating data ..."; sys.stdout.flush()
         print movBL.shape
