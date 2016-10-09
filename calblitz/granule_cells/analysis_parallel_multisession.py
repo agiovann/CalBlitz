@@ -25,46 +25,47 @@ import calblitz as cb
 import sys
 import numpy as np
 import pickle
-from calblitz.granule_cells.utils_granule import load_data_from_stored_results,process_eyelid_traces,process_wheel_traces,process_fast_process_day
+from calblitz.granule_cells.utils_granule import load_data_from_stored_results,process_eyelid_traces,process_wheel_traces,process_fast_process_day,process_wheel_traces_talmo
 import pandas as pd
 import re
 #%%
-backend='SLURM'
-if backend == 'SLURM':
-    n_processes = np.int(os.environ.get('SLURM_NPROCS'))
-else:
-    n_processes = np.maximum(np.int(psutil.cpu_count()),1) # roughly number of cores on your machine minus 1
-print 'using ' + str(n_processes) + ' processes'
-
-#%% start cluster for efficient computation
-single_thread=False
-
-if single_thread:
-    dview=None
-else:    
-    try:
-        c.close()
-    except:
-        print 'C was not existing, creating one'
-    print "Stopping  cluster to avoid unnencessary use of memory...."
-    sys.stdout.flush()  
+if False:
+    backend='local'
     if backend == 'SLURM':
-        try:
-            cse.utilities.stop_server(is_slurm=True)
-        except:
-            print 'Nothing to stop'
-        slurm_script='/mnt/xfs1/home/agiovann/SOFTWARE/Constrained_NMF/SLURM/slurmStart.sh'
-        cse.utilities.start_server(slurm_script=slurm_script)
-        pdir, profile = os.environ['IPPPDIR'], os.environ['IPPPROFILE']
-        c = Client(ipython_dir=pdir, profile=profile)        
+        n_processes = np.int(os.environ.get('SLURM_NPROCS'))
     else:
-        cse.utilities.stop_server()
-        cse.utilities.start_server()        
-        c=Client()
-
+        n_processes = np.maximum(np.int(psutil.cpu_count()),1) # roughly number of cores on your machine minus 1
+    print 'using ' + str(n_processes) + ' processes'
     
-    dview=c[::4]
-    print 'Using '+ str(len(dview)) + ' processes'
+    #% start cluster for efficient computation
+    single_thread=False
+    
+    if single_thread:
+        dview=None
+    else:    
+        try:
+            c.close()
+        except:
+            print 'C was not existing, creating one'
+        print "Stopping  cluster to avoid unnencessary use of memory...."
+        sys.stdout.flush()  
+        if backend == 'SLURM':
+            try:
+                cse.utilities.stop_server(is_slurm=True)
+            except:
+                print 'Nothing to stop'
+            slurm_script='/mnt/xfs1/home/agiovann/SOFTWARE/Constrained_NMF/SLURM/slurmStart.sh'
+            cse.utilities.start_server(slurm_script=slurm_script)
+            pdir, profile = os.environ['IPPPDIR'], os.environ['IPPPROFILE']
+            c = Client(ipython_dir=pdir, profile=profile)        
+        else:
+            cse.utilities.stop_server()
+            cse.utilities.start_server()        
+            c=Client()
+    
+        
+        dview=c[::4]
+        print 'Using '+ str(len(dview)) + ' processes'
     
 #%%
 base_folders=[
@@ -102,10 +103,11 @@ base_folders=[
 base_folders.sort()
 print base_folders              
 #%%
-results=dview.map_sync(cb.granule_cells.utils_granule.fast_process_day,base_folders)     
+if False:
+    results=dview.map_sync(cb.granule_cells.utils_granule.fast_process_day,base_folders)     
 
-#%% if this does not work look below
-triggers_chunk_fluo, eyelid_chunk,wheel_chunk ,triggers_chunk_bh ,tm_behav,names_chunks,fluo_chunk,pos_examples_chunks,A_chunks=process_fast_process_day(base_folders,save_name='eyeblink_35_37_sorted.npz')
+    #% if this does not work look below
+    triggers_chunk_fluo, eyelid_chunk,wheel_chunk ,triggers_chunk_bh ,tm_behav,names_chunks,fluo_chunk,pos_examples_chunks,A_chunks=process_fast_process_day(base_folders,save_name='eyeblink_35_37_sorted.npz')
 #%%
 #import re
 #triggers_chunk_fluo = []  
@@ -186,53 +188,204 @@ triggers_chunk_fluo, eyelid_chunk,wheel_chunk ,triggers_chunk_bh ,tm_behav,names
 with np.load('eyeblink_35_37.npz')  as ld:
     print (ld.keys())
     locals().update(ld)     
-       
+
+idx_sorted=names_chunks.argsort()
+names_chunks=names_chunks[idx_sorted]#[:27]       
+fluo_chunk=fluo_chunk[idx_sorted]#[:27]
+eyelid_chunk=eyelid_chunk[idx_sorted]#[:27]
+triggers_chunk_bh=triggers_chunk_bh[idx_sorted]#[:27]
+tm_behav=tm_behav[idx_sorted]#[:27]
+A_chunks=A_chunks[idx_sorted]#[:27]
+wheel_chunk=wheel_chunk[idx_sorted]#[:27]
+triggers_chunk_fluo=triggers_chunk_fluo[idx_sorted]#[:27]
+pos_examples_chunks=pos_examples_chunks[idx_sorted]#[:27]
 #%%
 thresh_middle=.05
 thresh_advanced=.35
 thresh_late=.9
 time_CR_on=-.1
 time_US_on=.05
-thresh_MOV_iqr=100
+thresh_mov=2
+#thresh_MOV_iqr=100
 time_CS_on_MOV=-.25
 time_US_on_MOV=0
 thresh_CR = 0.1,
 threshold_responsiveness=0.1
-time_bef=2.7
+time_bef=2.9
 time_aft=4.5
 f_rate_fluo=1/30.0
 ISI=.25
 min_trials=8
-cr_ampl=pd.DataFrame()
+
 mouse_now=''
 session_now=''
 session_id = 0
 #%%
-idx_sorted=names_chunks.argsort()
-names_chunks=names_chunks[idx_sorted]
+#names_trials=[]
+#last_dir=''
+#for nms in names_chunks:
+#    new_dir = os.path.dirname(nms)
+#    if last_dir != new_dir:
+#        print new_dir
+#        last_dir = new_dir
+#        templ_file=glob.glob(os.path.join())
+
 #%%
-names_trials=[]
-last_dir=''
-for nms in names_chunks:
-    new_dir = os.path.dirname(nms)
-    if last_dir != new_dir:
-        print new_dir
-        last_dir = new_dir
-        templ_file=glob.glob(os.path.join())
+talmo_file_name=['/mnt/xfs1/home/agiovann/dropbox/final_outputs/b35.mat','/mnt/xfs1/home/agiovann/dropbox/final_outputs/b37.mat']
+
+def unroll_Talmo_data(matr_list,is_nose=False):
+    files=[]
+    for xx in matr_list:
+        trials=[]
+        for xxx in xx[0]:
+            if is_nose:
+                
+                trials.append(np.nanmean(xxx[0],0))
+                print np.shape(xxx[0])
+            else:
+                
+                trials.append(xxx[0][0])  
+               
+                    
+                
+                
+        
+        files.append(trials)
+        
+        
+    return files    
+
+exptNames_TM=[]
+trials_TM=[]
+timestamps_TM=[]
+wheel_mms_TM=[]
+nose_TM=[]
+nose_vel_TM=[]
+animal_TM=[]
+for tfile in talmo_file_name:
+    ld=scipy.io.loadmat(tfile)
+    print(ld.keys())    
+    exptNames_TM=exptNames_TM+[xxp[0][0] for xxp in ld['exptNames']]
+    animal_TM=animal_TM+[os.path.split(tfile)[-1][:-4]]*len(exptNames_TM)
+    trials_TM=trials_TM+[xxp[0] for xxp in ld['trials']]
+    timestamps_TM=timestamps_TM+unroll_Talmo_data(ld['timestamps'])        
+    wheel_mms_TM=wheel_mms_TM+unroll_Talmo_data(ld['wheel_mms'])        
+    nose_TM=nose_TM+unroll_Talmo_data(ld['nose'],is_nose=True) 
+    nose_vel_TM=nose_vel_TM+unroll_Talmo_data(ld['nose_vel'],is_nose=True) 
 #%%
-triggers_chunk_fluo=  triggers_chunk_fluo[idx_sorted]
-triggers_chunk_bh=  triggers_chunk_bh[idx_sorted]
-eyelid_chunk=  eyelid_chunk[idx_sorted] 
-wheel_chunk=  wheel_chunk[idx_sorted] 
-tm_behav=  tm_behav[idx_sorted]
-fluo_chunk=  fluo_chunk[idx_sorted]
-pos_examples_chunks=  pos_examples_chunks[idx_sorted]
-A_chunks=  A_chunks[idx_sorted]
-cell_counter=0
+tiff_names_chunks=[] 
+sess_name_chunks=[]
+idx_trials_chunks=[]
+animal_chunks=[]
+timestamps_TM_chunk=[]
+wheel_mms_TM_chunk=[]
+nose_vel_TM_chunk=[]
 for tr_fl,tr_bh,eye,whe,tm,fl,nm,pos_examples,A in zip(triggers_chunk_fluo, triggers_chunk_bh, eyelid_chunk, wheel_chunk, tm_behav, fluo_chunk,names_chunks,pos_examples_chunks,A_chunks):
+      print(nm)
+      init,delta=(np.int(nm.split('/')[-1].split('#')[0][-12:-7]),np.int(nm.split('/')[-1].split('#')[1][1:4].replace('_','')))
+      idx_names=np.arange(init,init+delta)
+      fnames_behavior_talmo_tmp=[]
+      sess_name_chunks.append(nm.split('#')[0].split('/')[-2])
+      animal_chunks.append(nm.split('#')[0].split('/')[-3])
+
+      idx_sess = np.where([sess_name_chunks[-1] == xp for xp in exptNames_TM])[0]
+      wheel_tmp=wheel_mms_TM[idx_sess]
+      nose_tmp=nose_vel_TM[idx_sess]
+      time_TM_tmp=timestamps_TM[idx_sess]
+      tm_=[]
+      wh_=[]
+      ns_=[]
+      for idx_name in idx_names:          
+           nm_tmp=nm.split('#')[0][:-10] + str(idx_name).zfill(3)
+           target_file = glob(nm_tmp + '*.tif')
+           if len(target_file ) != 1:
+#               print len(target_file)
+               raise Exception('Zero or too many matches')               
+           fnames_behavior_talmo_tmp.append(target_file)   
+           wh_.append(wheel_tmp[idx_name-1])
+#           print len(nose_tmp[idx_name-1])
+           ns_.append(nose_tmp[idx_name-1])
+           tm_.append(time_TM_tmp[idx_name-1])
+#           timestamps_TM_chunk_TMP.append()
+#           wheel_mms_TM_chunk_TMP.append()
+
+
+      if len(fnames_behavior_talmo_tmp) != len(tr_bh):
+           raise Exception('Triggers not matching')     
+                 
+      tiff_names_chunks.append(fnames_behavior_talmo_tmp)   
+      idx_trials_chunks.append(idx_names)
+      timestamps_TM_chunk.append(np.array(tm_))
+      wheel_mms_TM_chunk.append(np.array(wh_))
+      nose_vel_TM_chunk.append(np.array(ns_))
+#%% define zones with big neurons
+if False:
+    min_pix=20
+    max_pix=492
+    good_neurons_chunk=[]
+    for fl,nm, pos_examples, A, tiff_names  in  zip(fluo_chunk,names_chunks,pos_examples_chunks,A_chunks,tiff_names_chunks):
+        print nm
+        idx_large_neurons=[]
+        with np.load(glob(os.path.join(os.path.dirname(nm),'*template*.npz'))[0]) as ld:
+            pl.cla()
+            img=np.median(ld['template_each'],0)
+        masks=cse.utilities.nf_read_roi_zip(os.path.join(os.path.dirname(nm),'RoiSet.zip'),(512,512))        
+        for mask in masks:
+            mask_flat=np.reshape(mask,(512*512),order='F')
+            idx_large_neurons=idx_large_neurons+list(np.where(A.T.dot(mask_flat))[0])
+        
+        idx_large_neurons=np.unique(idx_large_neurons) 
+        
+        f_perc=np.array([np.percentile(f,90,1) for f in fl])
+        too_active_neurons=np.where(np.mean(f_perc,0)>=4)[0]
+    #        cb.movie(img,fr=1).save(os.path.join(os.path.dirname(nm),'template_large_neurons.tif'))
+    #    lq,hq=np.percentile(img,[1, 99])
+    #    pl.imshow(img,cmap='gray',vmin=lq,vmax=hq)
+    #    pl.imshow(np.sum(masks,0),cmap='hot',alpha=.3,vmax=3)
+        fl_tot=np.concatenate(fl,1)
+        fitness,erfc=cse.utilities.compute_event_exceptionality(fl_tot)
+        good_traces=np.where(fitness<-20)[0]
+        
+        coms=cse.utilities.com(A.todense(),512,512)    
+        border_neurons=np.unique(np.concatenate([np.where(coms[:,0]>max_pix)[0],
+        np.where(coms[:,0]<min_pix)[0],
+        np.where(coms[:,1]>max_pix)[0],
+        np.where(coms[:,1]<min_pix)[0]]))  
+        final_examples=np.setdiff1d(pos_examples,border_neurons)
+        final_examples=np.setdiff1d(final_examples,idx_large_neurons)
+        final_examples=np.setdiff1d(final_examples,too_active_neurons)
+        final_examples=np.intersect1d(final_examples,good_traces)
+        good_neurons_chunk.append(final_examples)
+        print len(final_examples),np.shape(A)[-1]    
+        img=A.tocsc()[:,final_examples].sum(1).reshape((512,512),order='F')
+        lq,hq=np.percentile(img,[1, 99])
+        pl.imshow(img,cmap='gray',alpha=1,vmin=lq,vmax=hq)
+        pl.pause(.01)
+        
+    np.savez('good_neurons_chunk_2.npz',good_neurons_chunk=good_neurons_chunk)    
+else:
+    with np.load('good_neurons_chunk_2.npz')  as ld:
+        good_neurons_chunk=ld['good_neurons_chunk']
+#%%           
+#triggers_chunk_fluo=  triggers_chunk_fluo[idx_sorted]
+#triggers_chunk_bh=  triggers_chunk_bh[idx_sorted]
+#eyelid_chunk=  eyelid_chunk[idx_sorted] 
+#wheel_chunk=  wheel_chunk[idx_sorted] 
+#tm_behav=  tm_behav[idx_sorted]
+#fluo_chunk=  fluo_chunk[idx_sorted]
+#pos_examples_chunks=  pos_examples_chunks[idx_sorted]
+#A_chunks=  A_chunks[idx_sorted]
+cr_ampl=pd.DataFrame()
+bh_correl=pd.DataFrame()
+all_nose=[]  
+all_wheel=[]    
+
+cell_counter=0
+for tr_fl, tr_bh, eye, whe, tm, fl, nm, pos_examples, A, tiff_names, timestamps_TM_ ,wheel_mms_TM_, nose_vel_TM_ in\
+ zip(triggers_chunk_fluo, triggers_chunk_bh, eyelid_chunk, wheel_chunk, tm_behav, fluo_chunk,names_chunks,good_neurons_chunk,A_chunks,tiff_names_chunks,timestamps_TM_chunk,wheel_mms_TM_chunk,nose_vel_TM_chunk):
     session=nm.split('/')[8]
     day=nm.split('/')[8][:8]
-    
+    print nm
     mouse=nm.split('/')[7]
     if mouse != mouse_now:
         mouse_now=mouse
@@ -264,12 +417,31 @@ for tr_fl,tr_bh,eye,whe,tm,fl,nm,pos_examples,A in zip(triggers_chunk_fluo, trig
     idxCSCSUS=np.concatenate([idx_CS,idx_CS_US]) 
     
     
+    if 0:
+
+        wheel_traces, movement_at_CS, trigs_mov = process_wheel_traces(np.array(whe),tm,thresh_MOV_iqr=thresh_MOV_iqr,time_CS_on=time_CS_on_MOV,time_US_on=time_US_on_MOV)  
+
+    else:
+        
+        wheel_traces, movement_at_CS, trigs_mov = process_wheel_traces_talmo(wheel_mms_TM_,timestamps_TM_.copy(),tm,thresh_MOV=thresh_mov,time_CS_on=time_CS_on_MOV,time_US_on=time_US_on_MOV) 
+        nose_traces, movement_at_CS_nose, trigs_mov_nose = process_wheel_traces_talmo(nose_vel_TM_,timestamps_TM_.copy(),tm,thresh_MOV=0,time_CS_on=time_CS_on_MOV,time_US_on=time_US_on_MOV) 
+        print nose_traces.shape
+
+      
+        n_samples_ISI = np.int(ISI/np.median(np.diff(tm)))
+        wheel_traces[idxUS]=np.concatenate([wheel_traces[idxUS,:n_samples_ISI].copy(),wheel_traces[idxUS,:-n_samples_ISI].copy()],1)
+        nose_traces[idxUS]=np.concatenate([nose_traces[idxUS,:n_samples_ISI].copy(),nose_traces[idxUS,:-n_samples_ISI].copy()],1)
+        
+        all_nose.append(nose_traces)
+        all_wheel.append(wheel_traces)
     
-    wheel_traces, movement_at_CS, trigs_mov = process_wheel_traces(np.array(whe),tm,thresh_MOV_iqr=thresh_MOV_iqr,time_CS_on=time_CS_on_MOV,time_US_on=time_US_on_MOV)    
-    print 'fraction with movement:'    + str(len(trigs_mov['idxMOV'])*1./len(trigs_mov['idxNO_MOV']))
+    print 'fraction with movement:'    + str(len(trigs_mov['idxMOV'])*1./(len(trigs_mov['idxNO_MOV'])+len(trigs_mov['idxNO_MOV'])))
     
+
     mn_idx_CS_US =np.intersect1d(idx_CS_US,trigs_mov['idxNO_MOV'])
-    nm_idx_US= np.intersect1d(idx_US,trigs_mov['idxNO_MOV'])
+#    nm_idx_US= np.intersect1d(idx_US,trigs_mov['idxNO_MOV'])
+    nm_idx_US= idx_US
+
     nm_idx_CS= np.intersect1d(idx_CS,trigs_mov['idxNO_MOV'])
     nm_idxCSUSCR = np.intersect1d(idxCSUSCR,trigs_mov['idxNO_MOV'])
     nm_idxCSUSNOCR = np.intersect1d(idxCSUSNOCR,trigs_mov['idxNO_MOV'])
@@ -277,8 +449,9 @@ for tr_fl,tr_bh,eye,whe,tm,fl,nm,pos_examples,A in zip(triggers_chunk_fluo, trig
     nm_idxCSNOCR = np.intersect1d(idxCSNOCR,trigs_mov['idxNO_MOV'])
     nm_idxNOCR = np.intersect1d(idxNOCR,trigs_mov['idxNO_MOV'])
     nm_idxCR = np.intersect1d(idxCR,trigs_mov['idxNO_MOV'])
-    nm_idxUS = np.intersect1d(idxUS,trigs_mov['idxNO_MOV'])
     nm_idxCSCSUS = np.intersect1d(idxCSCSUS,trigs_mov['idxNO_MOV'])  
+    
+
     
     trial_names=['']*wheel_traces.shape[0]
     
@@ -300,20 +473,33 @@ for tr_fl,tr_bh,eye,whe,tm,fl,nm,pos_examples,A in zip(triggers_chunk_fluo, trig
 #    f_mat=np.concatenate([f[:,:len_min][np.newaxis,:] for f in fl],0)
     selct = lambda cs,us: np.int(cs) if np.isnan(us) else np.int(us)
     trigs_US=[selct(cs,us) for cs,us in zip(tr_fl[:,0],tr_fl[:,1])]     
+
+#    (wheel_traces_ds, t_wheel_ds)=scipy.signal.resample(wheel_traces,1/2.*len(tm),t=tm,axis=1)
+    
     
     samplbef=np.int(time_bef/f_rate_fluo)
-    samplaft=np.int(time_aft/f_rate_fluo)
+    samplaft=np.int(time_aft/f_rate_fluo) 
+
+#    wh_flat=np.concatenate([f[:,tr - samplbef:samplaft+tr] for tr,f in zip(trigs_US,fl)],1)
+#    wh_mat=np.concatenate([f[:,tr -samplbef:samplaft+tr][np.newaxis,:] for tr,f in zip(trigs_US,fl)],0)
+#    time_wh=np.arange(-samplbef,samplaft)*f_rate_fluo
+    
+    
     f_flat=np.concatenate([f[:,tr - samplbef:samplaft+tr] for tr,f in zip(trigs_US,fl)],1)
     f_mat=np.concatenate([f[:,tr -samplbef:samplaft+tr][np.newaxis,:] for tr,f in zip(trigs_US,fl)],0)
     time_fl=np.arange(-samplbef,samplaft)*f_rate_fluo
     
     f_mat_bl=f_mat-np.median(f_mat[:,:,np.logical_and(time_fl>-1,time_fl<-ISI)],axis=(2))[:,:,np.newaxis]   
+        
     amplitudes_responses=np.mean(f_mat_bl[:,:,np.logical_and(time_fl>-.03,time_fl<.04)],-1)
+    
+    
     cell_responsiveness=np.median(amplitudes_responses[nm_idxCSCSUS],axis=0)
     idx_responsive = np.where(cell_responsiveness>threshold_responsiveness)[0]
     fraction_responsive=len(np.where(cell_responsiveness>threshold_responsiveness)[0])*1./np.shape(f_mat_bl)[1]
 #    a=pd.DataFrame(data=f_mat[0,idx_components[:10],:],columns=np.arange(-30,30)*.033,index=idx_components[:10])
-    
+    ampl_CR=pd.DataFrame()
+    bh_correl_tmp=pd.DataFrame()
     if 0:
         idx_components, fitness, erfc = cse.utilities.evaluate_components(f_flat,N=5,robust_std=True)
         print len(idx_components[fitness<-25])*1./len(idx_components)    
@@ -321,34 +507,166 @@ for tr_fl,tr_bh,eye,whe,tm,fl,nm,pos_examples,A in zip(triggers_chunk_fluo, trig
         idx_components_final=np.intersect1d(idx_components_final,pos_examples)
         print len(idx_components_final)*1./len(idx_components)  
     else:
-        idx_components_final=np.intersect1d(idx_responsive,pos_examples)
+#        idx_components_final=np.intersect1d(idx_responsive,pos_examples)
+        idx_components_final=pos_examples
+        idx_responsive = np.intersect1d(idx_responsive,idx_components_final)
+
+    if 1:    
+        f_mat_bl_part=f_mat_bl[:,idx_components_final,:].copy()
+        bin_edge=np.arange(-3,4.5,.1)
     
+        bins=pd.cut(time_fl,bins=bin_edge)
+        bins_tm=pd.cut(tm,bins=bin_edge)
+    
+        time_bef_edge=0#-.25
+        time_aft_edge=0#2.5    
+        
+        idx_good_samples=np.where(np.logical_or(time_fl<=time_bef_edge,time_fl>=time_aft_edge))[0]
+        idx_good_samples_tm=np.where(np.logical_or(tm<=time_bef_edge,tm>=time_aft_edge))[0]
+        
+        time_ds_idx=np.where(np.logical_or(bin_edge<=time_bef_edge,bin_edge>=time_aft_edge))[0][1:]-1
+       
+        dfs=[pd.DataFrame(f_mat_bl_part[:,ii,:].T,index=time_fl) for ii in range(np.shape(f_mat_bl_part)[1])]
+        binned_fluo=np.array([df.groupby(bins).mean().values.T for df in dfs])[:,:,time_ds_idx].squeeze()
+        dfs=[pd.DataFrame(wheel_traces[ii],index=tm) for ii in range(np.shape(wheel_traces)[0])]
+        binned_wheel=np.array([df.groupby(bins_tm).mean().values.squeeze() for df in dfs])[:,time_ds_idx]
+        dfs=[pd.DataFrame(eye_traces[ii],index=tm) for ii in range(np.shape(eye_traces)[0])]
+        binned_eye=np.array([df.groupby(bins_tm).mean().values.squeeze() for df in dfs])[:,time_ds_idx]
+        dfs=[pd.DataFrame(nose_traces[ii],index=tm) for ii in range(np.shape(nose_traces)[0])]
+        binned_nose=np.array([df.groupby(bins_tm).mean().values.squeeze() for df in dfs])[:,time_ds_idx]
+        
+        
+        r_nose_fluo=[scipy.stats.pearsonr(binned_nose.flatten(),bf.flatten()) for bf in binned_fluo]
+        r_nose_fluo=[rnf[0] if rnf[1]<.01 and rnf[0]>0 else None for rnf in r_nose_fluo]
+        
+        r_nose_fluo_rnd=[scipy.stats.pearsonr(binned_nose[np.random.permutation(np.shape(binned_nose)[0])].flatten(),bf.flatten()) for bf in binned_fluo]
+        r_nose_fluo_rnd=[rnf[0] if rnf[1]<.01 and rnf[0]>0 else None for rnf in r_nose_fluo_rnd]
+    
+        r_wheel_fluo=[scipy.stats.pearsonr(binned_wheel.flatten(),bf.flatten()) for bf in binned_fluo]
+        r_wheel_fluo=[rnf[0] if rnf[1]<.01 and rnf[0]>0 else None for rnf in r_wheel_fluo]
+            
+        r_wheel_fluo_rnd=[scipy.stats.pearsonr(binned_wheel[np.random.permutation(np.shape(binned_wheel)[0])].flatten(),bf.flatten()) for bf in binned_fluo]
+        r_wheel_fluo_rnd=[rnf[0] if rnf[1]<.01 and rnf[0]>0 else None for rnf in r_wheel_fluo_rnd]
+    
+    
+        r_eye_fluo=[scipy.stats.pearsonr(binned_eye.flatten(),bf.flatten()) for bf in binned_fluo]
+        r_eye_fluo=[rnf[0] if rnf[1]<.01 and rnf[0]>0 else None for rnf in r_eye_fluo]
+    
+    
+        r_eye_fluo_rnd=[scipy.stats.pearsonr(binned_eye[np.random.permutation(np.shape(binned_eye)[0])].flatten(),bf.flatten()) for bf in binned_fluo]
+        r_eye_fluo_rnd=[rnf[0] if rnf[1]<.01 and rnf[0]>0 else None for rnf in r_eye_fluo_rnd]
+        
+        bh_correl_tmp['r_nose_fluo']=r_nose_fluo
+        bh_correl_tmp['r_nose_fluo_rnd']=r_nose_fluo_rnd
+        bh_correl_tmp['r_wheel_fluo']=r_wheel_fluo
+        bh_correl_tmp['r_wheel_fluo_rnd']=r_wheel_fluo_rnd
+        bh_correl_tmp['r_eye_fluo']=r_eye_fluo
+        bh_correl_tmp['r_eye_fluo_rnd']=r_eye_fluo_rnd
+
+        fluo_crpl=np.nanmedian(amplitudes_responses[idxCR,:][:,idx_responsive],0)    
+    fluo_crmn=np.nanmedian(amplitudes_responses[idxNOCR,:][:,idx_responsive],0)
+    
+    amplitudes_responses_US_fl=f_mat_bl[idx_US,:,:,][:,idx_components_final,:,][:,:,np.logical_and(time_fl>0.03,time_fl<.75)]
+    ampl_UR_eye=scipy.signal.resample(eye_traces[idx_US,:][:,np.logical_and(tm>.03,tm<.75)],np.shape(amplitudes_responses_US_fl)[-1],axis=1)
+    r_UR_fluo=[scipy.stats.pearsonr(bf.flatten(),ampl_UR_eye.flatten()) for bf in amplitudes_responses_US_fl.transpose([1,0,2])]
+    r_UR_fluo=[rnf[0] if rnf[1]<.1 and rnf[0]>0 else None for rnf in r_UR_fluo]
+    r_UR_fluo_rnd=[scipy.stats.pearsonr(bf.flatten(),ampl_UR_eye.flatten()[np.random.permutation(np.shape(ampl_UR_eye.flatten())[0])]) for bf in amplitudes_responses_US_fl.transpose([1,0,2])]
+    r_UR_fluo_rnd=[rnf[0] if rnf[1]<.1 and rnf[0]>0 else None for rnf in r_UR_fluo_rnd]
+
+    
+    bh_correl_tmp['r_UR_eye_fluo']=r_UR_fluo
+    bh_correl_tmp['r_UR_eye_fluo_rnd']=r_UR_fluo_rnd
+
+   
+    
+    amplitudes_responses_CR_fl=f_mat_bl[idxCSCSUS,:,:,][:,idx_components_final,:,][:,:,np.logical_and(time_fl>-0.5,time_fl<0.03)]
+    ampl_CR_eye=scipy.signal.resample(eye_traces[idxCSCSUS,:][:,np.logical_and(tm>-.5,tm<.03)],np.shape(amplitudes_responses_CR_fl)[-1],axis=1)
+    CR_eye_fluo=[scipy.stats.pearsonr(bf.flatten(),ampl_CR_eye.flatten()) for bf in amplitudes_responses_CR_fl.transpose([1,0,2])]
+    CR_eye_fluo=[rnf[0] if rnf[1]<.1 and rnf[0]>0 else None for rnf in CR_eye_fluo]
+    CR_eye_fluo_rnd=[scipy.stats.pearsonr(bf.flatten(),ampl_CR_eye.flatten()[np.random.permutation(np.shape(ampl_CR_eye.flatten())[0])]) for bf in amplitudes_responses_CR_fl.transpose([1,0,2])]
+    CR_eye_fluo_rnd=[rnf[0] if rnf[1]<.1 and rnf[0]>0 else None for rnf in CR_eye_fluo_rnd]
+
+    
+    bh_correl_tmp['r_CR_eye_fluo']=CR_eye_fluo
+    bh_correl_tmp['r_CR_eye_fluo_rnd']=CR_eye_fluo_rnd
+            
+        
+    if learning_phase>1 and binned_nose.shape[0]>30:
+        
+        ax1 = pl.subplot(2,1,1)
+        pl.cla()
+        ax1.plot(scipy.signal.savgol_filter(binned_nose.flatten()*5,3,1)-.25)
+        ax1.plot(scipy.signal.savgol_filter(binned_wheel.flatten()/10+2,5,1))
+        ax1.plot(scipy.signal.savgol_filter(binned_eye.flatten()+4,5,1))
+    
+        pl.legend(['nose','wheel','eye'])
+        ax2 = pl.subplot(2,1,2,sharex=ax1)
+        pl.cla()
+        
+        ax2.plot(scipy.signal.savgol_filter(binned_fluo[np.argmax(r_nose_fluo)].flatten(),7,1))
+        ax2.plot(scipy.signal.savgol_filter(binned_fluo[np.argmax(r_wheel_fluo)].flatten()+2,7,1))
+        ax2.plot(scipy.signal.savgol_filter(binned_fluo[np.argmax(r_eye_fluo)].flatten()+4,7,1))
+        ax2.plot(scipy.signal.savgol_filter(binned_fluo[np.argmax(CR_eye_fluo)].flatten()+6,7,1))
+        ax2.plot(scipy.signal.savgol_filter(binned_fluo[np.argmax(r_UR_fluo)].flatten()+8,7,1))
+    
+        pl.pause(10)
+            
+#            df_r=pd.DataFrame({'nose':r_nose_fluo,'wheel':r_wheel_fluo,'eye':r_eye_fluo})
+    
+        
+#            pl.subplot(1,3,1)
+#            pl.plot(r_nose_fluo,'.');pl.plot(r_nose_fluo_rnd,'.')
+#            pl.subplot(1,3,2)  
+#            pl.plot(r_wheel_fluo,'.');pl.plot(r_wheel_fluo_rnd,'.')
+#            pl.subplot(1,3,3)
+#            pl.plot(r_eye_fluo,'.');pl.plot(r_eye_fluo_rnd,'.')
+#
+#            df_r=pd.DataFrame({'nose':r_nose_fluo,'wheel':r_wheel_fluo,'eye':r_eye_fluo})    
 #    use_plus_minus=1
 #    if use_plus_minus:    
-    fluo_crpl=np.nanmedian(amplitudes_responses[idxCR,:][:,idx_components_final],0)
     
-    fluo_crmn=np.nanmedian(amplitudes_responses[idxNOCR,:][:,idx_components_final],0)
-        
-    ampl_CR=pd.DataFrame()
+    
+    
+    fluo_crpl_all=np.nanmedian(amplitudes_responses[idxCR,:][:,idx_components_final],0)    
+    fluo_crmn_all=np.nanmedian(amplitudes_responses[idxNOCR,:][:,idx_components_final],0)
+    fluo_crpl=np.nanmedian(amplitudes_responses[idxCR,:][:,idx_responsive],0)    
+    fluo_crmn=np.nanmedian(amplitudes_responses[idxNOCR,:][:,idx_responsive],0)
+
 #    ampl_no_CR=pd.DataFrame(np.median(amplitudes_responses[idxNOCR,:][:,idx_components_final],0))
     if len(nm_idxCR)>min_trials:
         
         ampl_CR['fluo_plus']=fluo_crpl
         ampl_CR['ampl_eyelid_CR']=np.mean(amplitudes_at_US[nm_idxCR])
+        bh_correl_tmp['fluo_plus']=fluo_crpl_all
+        bh_correl_tmp['ampl_eyelid_CR']=np.mean(amplitudes_at_US[nm_idxCR])
+        
     else:        
+
         ampl_CR['fluo_plus']=np.nan
         ampl_CR['ampl_eyelid_CR']=np.nan
+        bh_correl_tmp['fluo_plus']=np.nan
+        bh_correl_tmp['ampl_eyelid_CR']=np.nan
         
     if len(nm_idxNOCR)>min_trials:       
         ampl_CR['fluo_minus']=fluo_crmn
+        bh_correl_tmp['fluo_minus']=fluo_crmn_all
     else:
         ampl_CR['fluo_minus']=np.nan
+        bh_correl_tmp['fluo_minus']=np.nan
         
     ampl_CR['session']=session;
     ampl_CR['mouse']=mouse;
     ampl_CR['chunk']=chunk    
-    ampl_CR['idx_component']=idx_components_final;
+    
+    bh_correl_tmp['session']=session;
+    bh_correl_tmp['mouse']=mouse;
+    bh_correl_tmp['chunk']=chunk    
+    
+    ampl_CR['idx_component']=idx_responsive;
+
     ampl_CR['perc_CR']=len(nm_idxCR)*1./len(nm_idxCSCSUS)
+    bh_correl_tmp['perc_CR']=len(nm_idxCR)*1./len(nm_idxCSCSUS)
+    
     if  len(nm_idxCR)*1./len(nm_idxCSCSUS)> thresh_middle and learning_phase==0:
         learning_phase=1
         print 'middle'
@@ -358,10 +676,17 @@ for tr_fl,tr_bh,eye,whe,tm,fl,nm,pos_examples,A in zip(triggers_chunk_fluo, trig
     elif len(nm_idxCR)*1./len(nm_idxCSCSUS)> thresh_late and learning_phase==2:
         learning_phase=3
         print 'late'
+        
     ampl_CR['learning_phase']= learning_phase          
     ampl_CR['ampl_eyelid_CSCSUS']=np.mean(amplitudes_at_US[nm_idxCSCSUS])
     ampl_CR['session_id']=session_id
     cr_ampl=pd.concat([cr_ampl,ampl_CR])
+    
+    bh_correl_tmp['learning_phase']= learning_phase          
+    bh_correl_tmp['ampl_eyelid_CSCSUS']=np.mean(amplitudes_at_US[nm_idxCSCSUS])
+    bh_correl_tmp['session_id']=session_id
+    bh_correl=pd.concat([bh_correl,bh_correl_tmp])
+
 #    else:
 #        tmp_cr_ampl_tmp=pd.DataFrame()
 #        tmp_cr_ampl_tmp_2=pd.DataFrame()
@@ -415,43 +740,57 @@ for tr_fl,tr_bh,eye,whe,tm,fl,nm,pos_examples,A in zip(triggers_chunk_fluo, trig
 #    pl.plot(time_fl,np.nanmedian(f_mat_bl[nm_idxCR,:,:][:,idx_components_final,:],(0,1)),'b')
 #    pl.plot(time_fl,np.nanmedian(f_mat_bl[nm_idxNOCR,:,:][:,idx_components_final,:],(0,1)),'g')
 #%%
-thresh_mov=2
 mat_summaries=[
-#'/mnt/xfs1/home/agiovann/imaging/eyeblink/MAT_SUMMARIES/gc-AGGC6f-031213-03/python_out.mat',
-#'/mnt/xfs1/home/agiovann/imaging/eyeblink/MAT_SUMMARIES/gc-AG052014-02/python_out.mat',
-#'/mnt/xfs1/home/agiovann/imaging/eyeblink/MAT_SUMMARIES/AG052014-01/python_out.mat',
+'/mnt/xfs1/home/agiovann/imaging/eyeblink/MAT_SUMMARIES/gc-AGGC6f-031213-03/python_out.mat',
+'/mnt/xfs1/home/agiovann/imaging/eyeblink/MAT_SUMMARIES/gc-AG052014-02/python_out.mat',
+'/mnt/xfs1/home/agiovann/imaging/eyeblink/MAT_SUMMARIES/AG052014-01/python_out.mat',
 '/mnt/xfs1/home/agiovann/imaging/eyeblink/MAT_SUMMARIES/AG051514-01/python_out.mat']
 for mat_summary in mat_summaries:
     ld=scipy.io.loadmat(mat_summary)
     cr_ampl_dic=dict()
     cr_ampl_dic['trials']=np.array([a[0][0][0] for a in ld['python_trials']])
     cr_ampl_dic['trialsTypeOrig']=[css[0][0] for css in ld['python_trialsTypeOrig']]
-    cr_ampl_dic['trialName']=[css[0][0] for css in ld['python_trialName']]
+    cr_ampl_dic['trialName']=[css[0][0] for css in ld['python_trialName']]    
     cr_ampl_dic['session']=[css[0][0] for css in ld['python_session']]
     cr_ampl_dic['animal']=[css[0][0] for css in ld['python_animal']]
     cr_ampl_dic['day']=[css[0][0] for css in ld['python_day']]
     cr_ampl_dic['realDay']=[css[0][0] for css in ld['python_realDay']]
-    cr_ampl_dic['trials_talmo']=[css[0][0] for css in ld['python_trials_talmo']]
-    cr_ampl_dic['nose_talmo']=[css[0][0] for css in ld['python_nose_talmo']]
-    cr_ampl_dic['timestamps_talmo']=[css[0][0] for css in ld['python_timestamps_talmo']]
-    cr_ampl_dic['exptNames_talmo']=[css[0][0] for css in ld['python_exptNames_talmo']]
-    
+
+
     mat_time=np.array([css[0] for css in ld['python_time']])
     mat_wheel=np.array([css for css in ld['python_wheel']])
     mat_eyelid=np.array([css for css in ld['python_eyelid']])
-    mat_nose_talmo=np.array([css for css in ld['python_nose_vel_talmo']])    
-    mat_wheel_talmo=np.array([css for css in ld['python_wheel_cms_talmo']])
-    mat_wheel_talmo=np.abs(mat_wheel_talmo)
     
-    mat_ampl_at_US=np.nanmedian(mat_eyelid[np.logical_and(mat_time > -.05,mat_time < time_US_on) ,:],0)
-    wheel_ampl_while_CS=np.nanmax(mat_wheel_talmo[np.logical_and(mat_time > -ISI,mat_time < time_US_on) ,:],0)
-    
+    if 'python_trials_talmo' in ld:
+        
+        cr_ampl_dic['trials_talmo']=[css[0][0] for css in ld['python_trials_talmo']]
+        cr_ampl_dic['nose_talmo']=[css[0][0] for css in ld['python_nose_talmo']]
+        cr_ampl_dic['timestamps_talmo']=[css[0][0] for css in ld['python_timestamps_talmo']]
+        cr_ampl_dic['exptNames_talmo']=[css[0][0] for css in ld['python_exptNames_talmo']]
+        mat_wheel_talmo=np.array([css for css in ld['python_wheel_cms_talmo']])
+        mat_wheel_talmo=np.abs(mat_wheel_talmo)
+        mat_nose_talmo=np.array([css for css in ld['python_nose_vel_talmo']])    
+        wheel_ampl_while_CS=np.nanmax(mat_wheel_talmo[np.logical_and(mat_time > -ISI,mat_time < time_US_on) ,:],0)
+    else:
+        print('********   Talmo Behavior Not found *******')
+        cr_ampl_dic['nose_talmo']=None
+        cr_ampl_dic['timestamps_talmo']=None
+        cr_ampl_dic['exptNames_talmo']=None
+        mat_wheel_talmo=None
+        mat_wheel_talmo=None
+        mat_nose_talmo=None
+        wheel_ampl_while_CS=np.nanmax(mat_wheel[np.logical_and(mat_time > -ISI,mat_time < time_US_on) ,:],0)*0
+        
+         
+    mat_ampl_at_US=np.nanmedian(mat_eyelid[np.logical_and(mat_time > -.05,mat_time < time_US_on) ,:],0)    
     
     mat_fluo=np.concatenate([np.atleast_3d(css) for css in ld['python_fluo_traces']],-1)
-    mat_idxCR=np.where([np.logical_and(t in ['CSUS','CS'],ampl>=thresh_CR) for t,ampl in zip(cr_ampl_dic['trialsTypeOrig'],mat_ampl_at_US)])[0]
+    mat_idxCR=np.where([np.logical_and(t in ['CSUS','CS'],ampl>=thresh_CR) for t,ampl in zip(cr_ampl_dic['trialsTypeOrig'],mat_ampl_at_US)])[0]    
     mat_idxNOCR=np.where([np.logical_and(t in ['CSUS','CS'],ampl<thresh_CR) for t,ampl in zip(cr_ampl_dic['trialsTypeOrig'],mat_ampl_at_US)])[0]
-    
+    idxCSCSUS=np.union1d(mat_idxCR,mat_idxNOCR)
     idx_no_mov=np.where(wheel_ampl_while_CS<=thresh_mov)[0]
+    
+    print '******************************** Fraction with movement:' + str(1- len(idx_no_mov) * 1./   len(wheel_ampl_while_CS))
     
     mat_idxCR=np.intersect1d(mat_idxCR,idx_no_mov)
     mat_idxNOCR=np.intersect1d(mat_idxNOCR,idx_no_mov)
@@ -482,26 +821,137 @@ for mat_summary in mat_summaries:
         idx_NOCR=np.intersect1d(idx_sess,mat_idxNOCR)
         
         idx_neurons=np.arange(mat_fluo.shape[1])
+        
         ampl_CR=pd.DataFrame()
+        bh_correl_tmp=pd.DataFrame()
+
+        if 1:    
+            f_mat_bl_part=mat_fluo.copy()
+            bin_edge=np.arange(-3,4.5,.1)
+        
+            bins=pd.cut(mat_time,bins=bin_edge)
+            
+        
+            time_bef_edge=-0.25
+            time_aft_edge=2.5    
+            
+            idx_good_samples=np.where(np.logical_or(mat_time<=time_bef_edge,mat_time>=time_aft_edge))[0]
+            
+            time_ds_idx=np.where(np.logical_or(bin_edge<=time_bef_edge,bin_edge>=time_aft_edge))[0][1:]-1
+           
+
+            
+            dfs=[pd.DataFrame(f_mat_bl_part[:,ii,:].T,index=mat_time) for ii in range(np.shape(f_mat_bl_part)[1])]
+            binned_fluo=np.array([df.groupby(bins).mean().values.T for df in dfs])[:,:,time_ds_idx].squeeze()
+
+            if mat_nose_talmo is not None:
+                
+                dfs=[pd.DataFrame(mat_nose_talmo.T[ii],index=mat_time) for ii in range(np.shape(mat_nose_talmo.T)[0])]
+                binned_nose=np.array([df.groupby(bins).mean().values.squeeze() for df in dfs])[:,time_ds_idx]
+                r_nose_fluo=[scipy.stats.pearsonr(binned_nose.flatten(),bf.flatten()) for bf in binned_fluo]
+                r_nose_fluo=[rnf[0] if rnf[1]<.01 and rnf[0]>0 else None for rnf in r_nose_fluo]
+                bh_correl_tmp['r_nose_fluo']=r_nose_fluo
+                
+                r_nose_fluo_rnd=[scipy.stats.pearsonr(binned_nose[np.random.permutation(np.shape(binned_nose)[0])].flatten(),bf.flatten()) for bf in binned_fluo]
+                r_nose_fluo_rnd=[rnf[0] if rnf[1]<.01 and rnf[0]>0 else None for rnf in r_nose_fluo_rnd]
+                bh_correl_tmp['r_nose_fluo_rnd']=r_nose_fluo_rnd
+        
+            else:
+                
+                bh_correl_tmp['r_nose_fluo']=None
+                bh_correl_tmp['r_nose_fluo_rnd']=None
+                
+            if mat_wheel_talmo is not None:
+                
+                dfs=[pd.DataFrame(mat_wheel_talmo.T[ii],index=mat_time) for ii in range(np.shape(mat_wheel_talmo.T)[0])]
+                binned_wheel=np.array([df.groupby(bins).mean().values.squeeze() for df in dfs])[:,time_ds_idx]        
+                r_wheel_fluo=[scipy.stats.pearsonr(binned_wheel.flatten(),bf.flatten()) for bf in binned_fluo]
+                r_wheel_fluo=[rnf[0] if rnf[1]<.01 and rnf[0]>0 else None for rnf in r_wheel_fluo]
+                bh_correl_tmp['r_wheel_fluo']=r_wheel_fluo
+                
+                r_wheel_fluo_rnd=[scipy.stats.pearsonr(binned_wheel[np.random.permutation(np.shape(binned_wheel)[0])].flatten(),bf.flatten()) for bf in binned_fluo]
+                r_wheel_fluo_rnd=[rnf[0] if rnf[1]<.01 and rnf[0]>0 else None for rnf in r_wheel_fluo_rnd]
+                bh_correl_tmp['r_wheel_fluo_rnd']=r_wheel_fluo_rnd
+                
+            else:
+                
+                bh_correl_tmp['r_wheel_fluo']=None
+                bh_correl_tmp['r_wheel_fluo_rnd']=None
+                
+         
+            dfs=[pd.DataFrame(mat_eyelid.T[ii],index=mat_time) for ii in range(np.shape(mat_eyelid.T)[0])]
+            binned_eye=np.array([df.groupby(bins).mean().values.squeeze() for df in dfs])[:,time_ds_idx]
+            r_eye_fluo=[scipy.stats.pearsonr(binned_eye.flatten(),bf.flatten()) for bf in binned_fluo]
+            r_eye_fluo=[rnf[0] if rnf[1]<.01 and rnf[0]>0 else None for rnf in r_eye_fluo]
+            bh_correl_tmp['r_eye_fluo']=r_eye_fluo
+                
+            r_eye_fluo_rnd=[scipy.stats.pearsonr(binned_eye[np.random.permutation(np.shape(binned_eye)[0])].flatten(),bf.flatten()) for bf in binned_fluo]
+            r_eye_fluo_rnd=[rnf[0] if rnf[1]<.01 and rnf[0]>0 else None for rnf in r_eye_fluo_rnd]
+            bh_correl_tmp['r_eye_fluo_rnd']=r_eye_fluo_rnd
+            
+            
+            
+            amplitudes_responses_US_fl=mat_fluo[idxCSCSUS,:,:,][:,:,:,][:,:,np.logical_and(mat_time>0.03,mat_time<.75)]
+            ampl_UR_eye=mat_eyelid.T[idxCSCSUS,:][:,np.logical_and(mat_time>.03,mat_time<.75)]
+            r_UR_fluo=[scipy.stats.pearsonr(bf.flatten(),ampl_UR_eye.flatten()) for bf in amplitudes_responses_US_fl.transpose([1,0,2])]
+            r_UR_fluo=[rnf[0] if rnf[1]<.1 and rnf[0]>0 else None for rnf in r_UR_fluo]
+            r_UR_fluo_rnd=[scipy.stats.pearsonr(bf.flatten(),ampl_UR_eye.flatten()[np.random.permutation(np.shape(ampl_UR_eye.flatten())[0])]) for bf in amplitudes_responses_US_fl.transpose([1,0,2])]
+            r_UR_fluo_rnd=[rnf[0] if rnf[1]<.1 and rnf[0]>0 else None for rnf in r_UR_fluo_rnd]
+        
+            
+            bh_correl_tmp['r_UR_eye_fluo']=r_UR_fluo
+            bh_correl_tmp['r_UR_eye_fluo_rnd']=r_UR_fluo_rnd
+        
+           
+            
+            amplitudes_responses_CR_fl=mat_fluo[idxCSCSUS,:,:,][:,:,:,][:,:,np.logical_and(mat_time>-0.5,mat_time<0.03)]
+            ampl_CR_eye=mat_eyelid.T[idxCSCSUS,:][:,np.logical_and(mat_time>-.5,mat_time<.03)]
+            CR_eye_fluo=[scipy.stats.pearsonr(bf.flatten(),ampl_CR_eye.flatten()) for bf in amplitudes_responses_CR_fl.transpose([1,0,2])]
+            CR_eye_fluo=[rnf[0] if rnf[1]<.1 and rnf[0]>0 else None for rnf in CR_eye_fluo]
+            CR_eye_fluo_rnd=[scipy.stats.pearsonr(bf.flatten(),ampl_CR_eye.flatten()[np.random.permutation(np.shape(ampl_CR_eye.flatten())[0])]) for bf in amplitudes_responses_CR_fl.transpose([1,0,2])]
+            CR_eye_fluo_rnd=[rnf[0] if rnf[1]<.1 and rnf[0]>0 else None for rnf in CR_eye_fluo_rnd]
+
+            bh_correl_tmp['r_CR_eye_fluo']=CR_eye_fluo
+            bh_correl_tmp['r_CR_eye_fluo_rnd']=CR_eye_fluo_rnd
+        
         if len(idx_CR)>min_trials:    
             fluo_crpl=np.nanmedian(mat_fluo[idx_CR,:,:][:,:,np.logical_and(mat_time > -.05,mat_time < time_US_on)],(0,-1))
             ampl_CR['fluo_plus']=fluo_crpl
             ampl_CR['ampl_eyelid_CR']=np.mean(mat_ampl_at_US[idx_CR])
+            bh_correl_tmp['fluo_plus']=fluo_crpl
+            bh_correl_tmp['ampl_eyelid_CR']=np.mean(mat_ampl_at_US[idx_CR])
         else:        
             ampl_CR['fluo_plus']=np.nan*idx_neurons
             ampl_CR['ampl_eyelid_CR']=np.nan*idx_neurons
+            bh_correl_tmp['fluo_plus']=np.nan*idx_neurons
+            bh_correl_tmp['ampl_eyelid_CR']=np.nan*idx_neurons
             
         if len(idx_NOCR)>min_trials:       
             fluo_crmn=np.nanmedian(mat_fluo[idx_NOCR,:,:][:,:,np.logical_and(mat_time > -.05,mat_time < time_US_on)],(0,-1))
             ampl_CR['fluo_minus']=fluo_crmn
+            bh_correl_tmp['fluo_minus']=fluo_crmn
         else:
             ampl_CR['fluo_minus']=np.nan*idx_neurons
+            bh_correl_tmp['fluo_minus']=np.nan*idx_neurons
+                        
+            
             
         ampl_CR['session']=session
         ampl_CR['mouse']=mouse;
         ampl_CR['chunk']=ss    
+        
+        bh_correl_tmp['session']=session
+        bh_correl_tmp['mouse']=mouse;
+        bh_correl_tmp['chunk']=ss 
+        
+        
         ampl_CR['idx_component']=idx_neurons
         ampl_CR['perc_CR']=len(idx_CR)*1./(len(idx_NOCR)+len(idx_CR))
+        
+        
+        bh_correl_tmp['idx_component']=idx_neurons
+        bh_correl_tmp['perc_CR']=len(idx_CR)*1./(len(idx_NOCR)+len(idx_CR))
+        
         if  len(idx_CR)*1./(len(idx_NOCR)+len(idx_CR))> thresh_middle and learning_phase==0:
             learning_phase=1
             print 'middle'
@@ -514,8 +964,14 @@ for mat_summary in mat_summaries:
         ampl_CR['learning_phase']= learning_phase          
         ampl_CR['ampl_eyelid_CSCSUS']=np.mean(mat_ampl_at_US[np.union1d(idx_NOCR,idx_CR)])
         ampl_CR['session_id']=session_id
+        
+        bh_correl_tmp['learning_phase']= learning_phase          
+        bh_correl_tmp['ampl_eyelid_CSCSUS']=np.mean(mat_ampl_at_US[np.union1d(idx_NOCR,idx_CR)])
+        bh_correl_tmp['session_id']=session_id
+        
+        
         cr_ampl=pd.concat([cr_ampl,ampl_CR])        
-    
+        bh_correl=pd.concat([bh_correl,bh_correl_tmp])
 #%%    
 #print mat_idxCR.size
 #amplitudes_responses=np.nanmedian(mat_fluo[:,:,np.logical_and(mat_time > -.05,mat_time < time_US_on)],(-1))
@@ -596,8 +1052,6 @@ for mat_summary in mat_summaries:
 #mean_plus['fluo'].plot(kind='line',yerr=std_plus,marker='o',markersize=15)
 #mean_minus['fluo'].plot(kind='line',yerr=std_minus,marker='o',markersize=15)
 #%%
-
-#%%
 pl.rcParams['pdf.fonttype'] = 42
 font = {'family' : 'Myriad Pro',
         'weight' : 'regular',
@@ -606,10 +1060,49 @@ grouped_session=cr_ampl.groupby(['mouse','learning_phase'])
 grouped_session.mean().loc['b35'][['ampl_eyelid_CR','perc_CR']].plot(kind='line',subplots=True,layout=(2,1),marker='o',markersize=15,xticks=range(len(grouped_session.mean().loc['b35'])))
 pl.rc('font', **font)
 #pl.ylim([0,.5])
-grouped_session.mean().loc['b37'][['ampl_eyelid_CR','perc_CR']].plot(kind='line',subplots=True,layout=(2,1),marker='o',markersize=15,xticks=range(len(grouped_session.mean().loc['b37'])))
+#grouped_session.mean().loc['b37'][['ampl_eyelid_CR','perc_CR']].plot(kind='line',subplots=True,layout=(2,1),marker='o',markersize=15,xticks=range(len(grouped_session.mean().loc['b37'])))
+grouped_session.mean().loc['gc-AGGC6f-031213-03'][['ampl_eyelid_CR','perc_CR']].plot(kind='line',subplots=True,layout=(2,1),marker='o',markersize=15,xticks=range(len(grouped_session.mean().loc['b37'])))
+
 #pl.ylim([0,.5])
 pl.rc('font', **font)
 #%%
+pl.subplot(2,2,1)
+bh_correl.r_nose_fluo.plot(kind='hist',bins=100,normed=True,histtype = 'step')
+bh_correl.r_nose_fluo_rnd.plot(kind='hist',bins=100,normed=True,histtype = 'step')
+pl.xlabel('Correlation')
+pl.ylabel('Percentage of neurons')
+pl.title('Nose  vs fluo')
+pl.legend(['Measured','Random shuffle'])
+pl.subplot(2,2,2)
+bh_correl.r_wheel_fluo.plot(kind='hist',bins=100,normed=True,histtype = 'step')
+bh_correl.r_wheel_fluo_rnd.plot(kind='hist',bins=100,normed=True,histtype = 'step')
+pl.title('Wheel  vs fluo')
+pl.legend(['Measured','Random shuffle'])
+pl.xlabel('Correlation')
+pl.ylabel('Percentage of neurons')
+pl.subplot(2,2,3)
+bh_correl.r_UR_eye_fluo.plot(kind='hist',bins=100,normed=True,histtype = 'step')
+bh_correl.r_UR_eye_fluo_rnd.plot(kind='hist',bins=100,normed=True,histtype = 'step')
+pl.title('UR  vs fluo')
+pl.legend(['Measured','Random shuffle'])
+pl.xlabel('Correlation')
+pl.ylabel('Percentage of neurons')
+pl.subplot(2,2,4)
+bh_correl.r_CR_eye_fluo.plot(kind='hist',bins=100,normed=True,histtype = 'step')
+bh_correl.r_CR_eye_fluo_rnd.plot(kind='hist',bins=100,normed=True,histtype = 'step')
+#bh_correl_tmp.delta_norm.plot(kind='hist',bins=200,normed=True)
+#bh_correl.delta_norm.plot(kind='hist',bins=30,normed=True)
+pl.title('CR vs fluo')
+pl.legend(['Measured','Random shuffle'])
+pl.xlabel('Correlation')
+pl.ylabel('Percentage of neurons')
+#%%
+bh_correl_tmp=bh_correl.copy()
+bh_correl_tmp['delta_norm']=(bh_correl_tmp['fluo_plus']-bh_correl_tmp['fluo_minus'])/np.abs(bh_correl_tmp['fluo_plus']+bh_correl_tmp['fluo_minus'])   
+bh_correl_tmp['delta_norm'][(bh_correl_tmp['fluo_plus']+bh_correl_tmp['fluo_minus'])<.1]=np.nan       
+
+#%%
+
 grouped_session=cr_ampl.groupby(['learning_phase'])    
 sems=grouped_session.sem()[['fluo_plus','fluo_minus']]
 grouped_session.median()[['fluo_plus','fluo_minus']].plot(kind='line',yerr=sems,marker='o',markersize=15,xticks=range(len(grouped_session.mean())))
@@ -621,11 +1114,11 @@ pl.legend(['CR+','CR-'],loc=0)
 pl.xlim([-.1 ,3.1])
 #%%
 cr_ampl_m=cr_ampl#[cr_ampl['mouse']=='b37']
-bins=[0, .05,  .35, .9, 1]
+bins=[0, .2,  .4, .9, 1]
 grouped_session=cr_ampl_m.groupby(pd.cut(cr_ampl_m['perc_CR'],bins,include_lowest=True)) 
 means=grouped_session.mean()[['fluo_plus','fluo_minus']]
 sems=grouped_session.sem()[['fluo_plus','fluo_minus']]
-means.plot(kind='line',yerr=sems,marker='o',xticks=range(6),markersize=15)
+means.plot(kind='line',yerr=sems,marker ='o',xticks=range(6),markersize=15)
 pl.xlim([-.1, 5.1])
 pl.legend(['CR+','CR-'],loc=4)
 pl.xlabel('Fraction of CRs')
@@ -652,12 +1145,18 @@ pl.close('all')
 
 for counter,ms in enumerate(cr_ampl_m.mouse.unique()):
     cr_now=cr_ampl_m[cr_ampl_m.mouse==ms]
-    if 'gc' in ms or 'b3' in ms:
+    if 'b3' in ms:
         cr_now=cr_now[cr_now.session_id>=np.maximum(0,cr_now.session_id.max()-3)]
     else:
         if ms == 'AG052014-01':
             print '*'
             cr_now=cr_now[cr_now.session_id==np.maximum(0,cr_now.session_id.max()-3)]
+        elif ms == 'gc-AG052014-02':
+            print '**'
+            cr_now=cr_now[cr_now.session_id>=np.maximum(0,cr_now.session_id.max()-5)]
+        elif ms == 'AG051514-01':
+            print '**'
+            cr_now=cr_now[cr_now.session_id>=np.maximum(0,cr_now.session_id.max()-2)]    
         else:
             cr_now=cr_now[cr_now.session_id==np.maximum(0,cr_now.session_id.max())]    
     cr_now['delta']=(cr_now['fluo_plus']-cr_now['fluo_minus'])  

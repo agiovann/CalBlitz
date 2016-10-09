@@ -512,6 +512,34 @@ def process_wheel_traces(traces,time_vect,thresh_MOV_iqr=3,time_CS_on=-.25,time_
     trigs['idxNO_MOV']=np.where(movement_at_CS<thresh_MOV_iqr)[-1]
     
     return wheel_traces, movement_at_CS, trigs
+    
+#%%    
+def process_wheel_traces_talmo(wheel_mms_TM_,timestamps_TM_,tm,thresh_MOV=.2,time_CS_on=-.25,time_US_on=0):     
+    
+    wheel_traces=[]
+    for tr_,tm_ in zip(wheel_mms_TM_,timestamps_TM_):
+        if len(tm_)<len(tm):
+            #print ['Adjusting the samples:',len(tm)-len(tm_)]
+            wheel_traces.append(np.pad(tr_,(0,len(tm)-len(tm_)),mode='edge'))
+        elif len(tm_)>len(tm):
+            wheel_traces.append(tr_[len(tm_)-len(tm):])
+            #print ['Removing the samples:',len(tm)-len(tm_)]
+        else:
+            wheel_traces.append(tr_)
+    
+    wheel_traces=np.abs(np.array(wheel_traces))/10 # to cm
+#    tmp = traces[:,time_vect<time_CS_on]
+#    wheel_traces=traces/(np.percentile(tmp,75)-np.percentile(tmp,25))
+    
+    movement_at_CS=np.max(wheel_traces[:,np.logical_and( tm > time_CS_on, tm <= time_US_on )],1)
+    
+    trigs=dict()
+    
+    trigs['idxMOV']=np.where(movement_at_CS>thresh_MOV)[-1]
+    trigs['idxNO_MOV']=np.where(movement_at_CS<thresh_MOV)[-1]
+    
+    return wheel_traces, movement_at_CS, trigs
+    
 #%%
 def load_results(f_results):
     """
