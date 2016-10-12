@@ -100,7 +100,7 @@ t2=time()-t1
 print t2
 #%%   
 all_movs=[]
-for f in  fnames:
+for f in  fls:
     idx=f.find('.')
     with np.load(f[:idx+1]+'npz') as fl:
         print f
