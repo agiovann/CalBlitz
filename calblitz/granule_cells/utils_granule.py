@@ -527,8 +527,9 @@ def process_wheel_traces_talmo(wheel_mms_TM_,timestamps_TM_,tm,thresh_MOV=.2,tim
         else:
             wheel_traces.append(tr_)
     
-    wheel_traces=np.abs(np.array(wheel_traces))/10 # to cm
+#    wheel_traces=np.abs(np.array(wheel_traces))/10 # to cm
 #    tmp = traces[:,time_vect<time_CS_on]
+    wheel_traces=np.abs(np.array(wheel_traces))
 #    wheel_traces=traces/(np.percentile(tmp,75)-np.percentile(tmp,25))
     
     movement_at_CS=np.max(wheel_traces[:,np.logical_and( tm > time_CS_on, tm <= time_US_on )],1)
