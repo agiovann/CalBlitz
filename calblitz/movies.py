@@ -71,8 +71,7 @@ class movie(ts.timeseries):
     #             file_name=None, meta_data=None, **kwargs):
     def __new__(cls, input_arr, **kwargs):
 
-        if (type(input_arr) is np.ndarray) or \
-           (type(input_arr) is h5py._hl.dataset.Dataset):
+        if (type(input_arr) is np.ndarray) or (type(input_arr) is h5py._hl.dataset.Dataset):
             # kwargs['start_time']=start_time;
             # kwargs['file_name']=file_name;
             # kwargs['meta_data']=meta_data;
