@@ -1,6 +1,8 @@
 # CalBlitz
 **Blazing fast** calcium imaging analysis toolbox
 
+Calblitz is now obsolete. Please refer to the new package [Caiman](https://github.com/simonsfoundation/CaImAn)
+
 ## Synopsis
 
 Recent advances in calcium imaging acquisition techniques are creating datasets of the order of Terabytes/week. Memory and computationally efficient algorithms are required to analyze in reasonable amount of time terabytes of data. This projects implements a set of essential methods required in the calcium imaging movies analysis pipeline. **Fast and scalable algorithms** are implemented for motion correction, movie manipulation and roi segmentation. It is assumed that movies are collected with the scanimage data acquisition software and stored in *.tif* format. Find below a schematic of the calcium imaging pipeline:
