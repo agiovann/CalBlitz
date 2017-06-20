@@ -1,4 +1,4 @@
-# CalBlitz
+# CalBlitz (OBSOLETE, SEE CAIMAN)
 **Blazing fast** calcium imaging analysis toolbox
 
 Calblitz is now obsolete. Please refer to the new package [Caiman](https://github.com/simonsfoundation/CaImAn)
